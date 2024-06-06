@@ -5,10 +5,7 @@
       "init": {
         "description": "Submit your kadermanager details for the search queries.",
         "data": {
-          "offset": "Offset in minutes",
-          "only_direct": "Only show direct connections?",
-          "max_connections": "Max connections in sensor",
-          "ignored_products": "Products to ignore"
+          "team_name": "Team Name"
         }
       }
     }
@@ -19,12 +16,7 @@
       "user": {
         "description": "Submit your kadermanager details for the search queries.",
         "data": {
-          "start": "Start station",
-          "destination": "Destination station",
-          "offset": "Offset in minutes",
-          "only_direct": "Only show direct connections?",
-          "max_connections": "Max connections in sensor",
-          "ignored_products": "Products to ignore"
+          "team_name": "Team Name"
         }
       }
     },

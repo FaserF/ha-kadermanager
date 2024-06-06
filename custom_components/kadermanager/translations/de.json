@@ -1,39 +1,31 @@
 {
   "options": {
-    "flow_title": "Einrichtung der:{entity_name}",
+    "flow_title": "Einrichtung Kadermanager:{entity_name}",
     "step": {
       "init": {
-        "description": "Trage hier deine Zug Station Informationen ein für die Suchabfrage.",
+        "description": "Gib hier deine Kadermanager Infos an für die Suchabfragen.",
         "data": {
-          "offset": "Versatz in Minutes",
-          "only_direct": "Zeige nur direkte Verbindungen?",
-          "max_connections": "Maximale Anzahle der angezeigten Verbindungen",
-          "ignored_products": "Zu ignorierende Produkte"
+          "team_name": "Team Name"
         }
       }
     }
   },
   "config": {
-    "flow_title": "Einrichtung der DeutscheBahn Integration",
+    "flow_title": "Setup Kadermanager",
     "step": {
       "user": {
-        "description": "Trage hier deine Zug Station Informationen ein für die Suchabfrage.",
+        "description": "Gib hier deine Kadermanager Infos an für die Suchabfragen.",
         "data": {
-          "start": "Start Station",
-          "destination": "Ziel station",
-          "offset": "Versatz in Minutes",
-          "only_direct": "Zeige nur direkte Verbindungen?",
-          "max_connections": "Maximale Anzahle der angezeigten Verbindungen",
-          "ignored_products": "Zu ignorierende Produkte"
+          "team_name": "Team Name"
         }
       }
     },
     "abort": {
-      "already_configured": "Diese Start & Ziel Station Kombination ist bereits konfiguriert."
+      "already_configured": "Dieser Kadermanager ist bereits eingerichtet"
     },
     "error": {
-      "invalid_station": "Ungültige Start/Ziel Station",
-      "unknown": "Unbekannter Fehler"
+      "invalid_station": "Ungültiger Kadermanager",
+      "unknown": "Unknown Error"
     }
   }
 }

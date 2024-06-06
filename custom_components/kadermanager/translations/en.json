@@ -1,38 +1,30 @@
 {
   "options": {
-    "flow_title": "Setup DB:{entity_name}",
+    "flow_title": "Setup Kadermanager:{entity_name}",
     "step": {
       "init": {
-        "description": "Submit your train station details for the search queries.",
+        "description": "Submit your kadermanager details for the search queries.",
         "data": {
-          "offset": "Offset in minutes",
-          "only_direct": "Only show direct connections?",
-          "max_connections": "Max connections in sensor",
-          "ignored_products": "Products to ignore"
+          "team_name": "Team Name"
         }
       }
     }
   },
   "config": {
-    "flow_title": "Setup DeutscheBahn",
+    "flow_title": "Setup Kadermanager",
     "step": {
       "user": {
-        "description": "Submit your train station details for the search queries.",
+        "description": "Submit your kadermanager details for the search queries.",
         "data": {
-          "start": "Start station",
-          "destination": "Destination station",
-          "offset": "Offset in minutes",
-          "only_direct": "Only show direct connections?",
-          "max_connections": "Max connections in sensor",
-          "ignored_products": "Products to ignore"
+          "team_name": "Team Name"
         }
       }
     },
     "abort": {
-      "already_configured": "This start & Destination combination is already configured"
+      "already_configured": "This kadermanager is already configured"
     },
     "error": {
-      "invalid_station": "Invalid Start / Destination station",
+      "invalid_station": "Invalid Kadermanager",
       "unknown": "Unknown Error"
     }
   }
