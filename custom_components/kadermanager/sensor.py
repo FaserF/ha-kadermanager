@@ -3,6 +3,8 @@ from datetime import timedelta, datetime
 import logging
 from typing import Any, Callable, Dict, Optional, Set
 import re
+import requests
+from bs4 import BeautifulSoup
 
 import async_timeout
 
@@ -27,7 +29,6 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(minutes=2)
-URL = f"'https://' + {config[CONF_TEAM_NAME]} + '.kadermanager.de/events'"
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigType, async_add_entities
@@ -46,11 +47,12 @@ async def async_setup_entry(
     )
 
 class KadermanagerSensor(SensorEntity):
-    """Implementation of a Deutsche Bahn sensor."""
+    """Implementation of a Kadermanager sensor."""
 
     def __init__(self, config, hass: HomeAssistant):
         super().__init__()
-        self._name = f"{config[CONF_TEAM_NAME]}"
+        self._name = f"'kadermanager_' + {config[CONF_TEAM_NAME]}"
+        self.teamname = f"{config[CONF_TEAM_NAME]}"
         self._state = None
         self._available = True
         self.hass = hass
@@ -84,28 +86,13 @@ class KadermanagerSensor(SensorEntity):
         """Return the kadermanager informations."""
         return self._state
 
-    @property
-    def extra_state_attributes(self):
-        """Return the state attributes."""
-        if len(self.connections) > 0:
-            connections = self.connections[0].copy()
-            for cons in range(1,len(self.connections)):
-                if len(self.connections) > cons:
-                    connections[f"next_{cons}"] = self.connections[cons]["departure"]
-                    connections[f"next_{cons}_delay"] = self.connections[cons]["delay"]
-                    connections[f"next_{cons}_canceled"] = self.connections[cons]["canceled"]
-                    connections[f"next_{cons}_arrival"] = self.connections[cons]["arrival"]
-        else:
-            connections = None
-        connections["departures"] = self.connections
-        return connections
-
     async def async_update(self):
         try:
             with async_timeout.timeout(30):
                 hass = self.hass
+                URL = 'https://' + {self.teamname} + '.kadermanager.de/events'
                 """Pull data from the kadermanager.de web page."""
-                _LOGGER.debug(f"Update the connection data for '{config[CONF_TEAM_NAME]}'")
+                _LOGGER.debug(f"Update the connection data for '{self.teamname}'")
                 events = await hass.async_add_executor_job(
                         get_kadermanager_events(URL)
                     )
@@ -115,8 +102,10 @@ class KadermanagerSensor(SensorEntity):
                         'location': events[0]['location'],
                         'in_count': events[0]['in_count'],
                         'out_count': events[0]['out_count'],
+                        'title': events[0]['title'],
+                        'link': events[0]['link'],
                     }
-        except:
+        except Exception as e:
             self._available = False
             _LOGGER.error(f"Error fetching data from Kadermanager: {e}")
 
@@ -135,14 +124,23 @@ def get_kadermanager_events(url):
         response_event = requests.get(event_url)
         soup_event = BeautifulSoup(response_event.text, 'html.parser')
 
-        in_count = int(soup_event.find('a', href=lambda x: x and 'tab_in' in x).text.split()[-1])
-        out_count = int(soup_event.find('a', href=lambda x: x and 'tab_out' in x).text.split()[-1])
+        in_link = soup_event.find('a', href=True, text=lambda x: x and 'In' in x)
+        in_count = int(in_link.text.split()[-1]) if in_link else 0
+
+        out_link = soup_event.find('a', href=True, text=lambda x: x and 'Out' in x)
+        out_count = int(out_link.text.split()[-1]) if out_link else 0
+
+        event_title_element = soup_event.find('div', class_='event-detailed-label event_type_1')
+        event_title = event_title_element.find('a').text.strip().split('·')[0].strip()
+        event_link = event_title_element.find('a')['href']
 
         event_info = {
             'date': event_date,
             'location': event_location,
             'in_count': in_count,
             'out_count': out_count,
+            'title': event_title,
+            'link': event_link,
         }
         events.append(event_info)
 
