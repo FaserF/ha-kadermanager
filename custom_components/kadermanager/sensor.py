@@ -1,8 +1,7 @@
 """kadermanager sensor platform."""
 from datetime import timedelta, datetime
 import logging
-from typing import Any, Callable, Dict, Optional, Set
-import re
+from typing import Any, Callable, Dict, Optional
 import requests
 from bs4 import BeautifulSoup
 
@@ -31,14 +30,13 @@ _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(minutes=2)
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigType, async_add_entities
+    hass: HomeAssistant, entry: ConfigType, async_add_entities: AddEntitiesCallback
 ):
     """Setup sensors from a config entry created in the integrations UI."""
     config = hass.data[DOMAIN][entry.entry_id]
     _LOGGER.debug("Sensor async_setup_entry")
     if entry.options:
         config.update(entry.options)
-    sensors = KadermanagerSensor(config, hass)
     async_add_entities(
         [
             KadermanagerSensor(config, hass)
@@ -51,12 +49,13 @@ class KadermanagerSensor(SensorEntity):
 
     def __init__(self, config, hass: HomeAssistant):
         super().__init__()
-        self._name = f"'kadermanager_' + {config[CONF_TEAM_NAME]}"
-        self.teamname = f"{config[CONF_TEAM_NAME]}"
+        self._name = f"kadermanager_{config[CONF_TEAM_NAME]}"
+        self.teamname = config[CONF_TEAM_NAME]
         self._state = None
         self._available = True
         self.hass = hass
         self.updated = datetime.now()
+        self._attributes = {}
 
     @property
     def name(self):
@@ -67,7 +66,6 @@ class KadermanagerSensor(SensorEntity):
     def unique_id(self) -> str:
         """Return the unique ID of the sensor."""
         return self._name
-        #return f"{self.start}_{self.goal}"
 
     @property
     def icon(self):
@@ -82,20 +80,17 @@ class KadermanagerSensor(SensorEntity):
             return "Unknown"
 
     @property
-    def native_value(self):
-        """Return the kadermanager informations."""
-        return self._state
+    def extra_state_attributes(self):
+        """Return the state attributes."""
+        return self._attributes
 
     async def async_update(self):
         try:
             with async_timeout.timeout(30):
-                hass = self.hass
-                URL = 'https://' + {self.teamname} + '.kadermanager.de/events'
+                URL = f"https://{self.teamname}.kadermanager.de/events"
                 """Pull data from the kadermanager.de web page."""
                 _LOGGER.debug(f"Update the connection data for '{self.teamname}'")
-                events = await hass.async_add_executor_job(
-                        get_kadermanager_events(URL)
-                    )
+                events = await self.hass.async_add_executor_job(get_kadermanager_events, URL)
                 if events:
                     self._state = events[0]['date']
                     self._attributes = {
@@ -118,8 +113,14 @@ def get_kadermanager_events(url):
     event_links = soup.find_all('a', href=True, style="color: inherit;")
     for link in event_links:
         event_url = link['href']
-        event_date = link.find('h4').text.strip()
-        event_location = link.find('div').text.strip()
+        event_date_element = link.find('h4')
+        event_location_element = link.find('div')
+
+        if event_date_element is None or event_location_element is None:
+            continue
+
+        event_date = event_date_element.text.strip()
+        event_location = event_location_element.text.strip()
 
         response_event = requests.get(event_url)
         soup_event = BeautifulSoup(response_event.text, 'html.parser')
@@ -131,8 +132,15 @@ def get_kadermanager_events(url):
         out_count = int(out_link.text.split()[-1]) if out_link else 0
 
         event_title_element = soup_event.find('div', class_='event-detailed-label event_type_1')
-        event_title = event_title_element.find('a').text.strip().split('·')[0].strip()
-        event_link = event_title_element.find('a')['href']
+        if event_title_element is None:
+            continue
+
+        event_title_link = event_title_element.find('a')
+        if event_title_link is None:
+            continue
+
+        event_title = event_title_link.text.strip().split('·')[0].strip()
+        event_link = event_title_link['href']
 
         event_info = {
             'date': event_date,
@@ -147,4 +155,4 @@ def get_kadermanager_events(url):
     return events
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
-    add_entities([KadermanagerSensor()])
+    add_entities([KadermanagerSensor(config, hass)])
