@@ -1,0 +1,16 @@
+{
+  "domain": "kadermanager",
+  "name": "Kadermanager",
+  "codeowners": [
+    "@faserf"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/faserf/ha-kadermanager#readme",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/faserf/ha-kadermanager/issues",
+  "requirements": [
+    "beautifulsoup4==4.12.3"
+  ],
+  "dependencies": [],
+  "version": "1.0.0"
+}

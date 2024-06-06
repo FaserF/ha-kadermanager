@@ -1,0 +1,39 @@
+{
+  "options": {
+    "flow_title": "Setup Kadermanager:{entity_name}",
+    "step": {
+      "init": {
+        "description": "Submit your kadermanager details for the search queries.",
+        "data": {
+          "offset": "Offset in minutes",
+          "only_direct": "Only show direct connections?",
+          "max_connections": "Max connections in sensor",
+          "ignored_products": "Products to ignore"
+        }
+      }
+    }
+  },
+  "config": {
+    "flow_title": "Setup Kadermanager",
+    "step": {
+      "user": {
+        "description": "Submit your kadermanager details for the search queries.",
+        "data": {
+          "start": "Start station",
+          "destination": "Destination station",
+          "offset": "Offset in minutes",
+          "only_direct": "Only show direct connections?",
+          "max_connections": "Max connections in sensor",
+          "ignored_products": "Products to ignore"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This kadermanager is already configured"
+    },
+    "error": {
+      "invalid_station": "Invalid Kadermanager",
+      "unknown": "Unknown Error"
+    }
+  }
+}

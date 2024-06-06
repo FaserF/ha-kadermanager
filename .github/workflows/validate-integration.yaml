@@ -1,0 +1,23 @@
+---
+name: Cron actions
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  validate:
+    runs-on: "ubuntu-latest"
+    name: Validate
+    steps:
+        - uses: "actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29" # v4
+
+        - name: HACS validation
+          uses: "hacs/action@main"
+          with:
+            category: "integration"
+
+        - name: Hassfest validation
+          uses: "home-assistant/actions/hassfest@master"
