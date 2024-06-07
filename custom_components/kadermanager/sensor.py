@@ -90,7 +90,7 @@ class KadermanagerSensor(SensorEntity):
                 URL = f"https://{self.teamname}.kadermanager.de/events"
                 """Pull data from the kadermanager.de web page."""
                 _LOGGER.debug(f"Update the connection data for '{self.teamname}'")
-                events = await self.hass.async_add_executor_job(get_kadermanager_events, URL)
+                events = await self.hass.async_add_executor_job(get_kadermanager_events, URL) 
                 if events:
                     self._state = events[0]['date']
                     self._attributes = {
@@ -107,6 +107,8 @@ class KadermanagerSensor(SensorEntity):
 def get_kadermanager_events(url):
     response = requests.get(url)
     soup = BeautifulSoup(response.text, 'html.parser')
+
+    _LOGGER.debug(f"Fetched data: {response}")
 
     events = []
 
@@ -142,11 +144,13 @@ def get_kadermanager_events(url):
         event_title = event_title_link.text.strip().split('·')[0].strip()
         event_link = event_title_link['href']
 
+        _LOGGER.debug(f"Fetched informations: {event_title} - {event_link} - {event_date} - {event_location} - In: {in_count} - Out: {in_count}")
+
         event_info = {
             'date': event_date,
             'location': event_location,
             'in_count': in_count,
-            'out_count': out_count,
+            'out_count': in_count,
             'title': event_title,
             'link': event_link,
         }
