@@ -92,13 +92,10 @@ class KadermanagerSensor(SensorEntity):
                 _LOGGER.debug(f"Update the connection data for '{self.teamname}'")
                 events = await self.hass.async_add_executor_job(get_kadermanager_events, URL)
                 if events:
-                    self._state = events[0]['date']
+                    limited_events = events[:5]  # Limit to the next 5 events
+                    self._state = limited_events[0]['original_date']
                     self._attributes = {
-                        'location': events[0].get('location', 'Unknown'),
-                        'in_count': events[0]['in_count'],
-                        'out_count': events[0].get('out_count', 'Unknown'),
-                        'title': events[0]['title'],
-                        'link': events[0]['link'],
+                        'events': limited_events
                     }
                 else:
                     self._state = "No events found"
@@ -123,30 +120,49 @@ def get_kadermanager_events(url):
 
         event_url = event_link_element['href']
         event_date_element = container.find('h4')
-        event_date = event_date_element.text.strip() if event_date_element else "Unknown"
+        event_date_time = event_date_element.text.strip() if event_date_element else "Unknown"
+
+        # Split event_date_time into date and time
+        if ' um ' in event_date_time:
+            event_date, event_time = event_date_time.split(' um ')
+        else:
+            event_date = event_date_time
+            event_time = "Unknown"
+
+        # Parse the date using multiple formats
+        event_date_iso = None
+        for date_format in ["%a %d.%m.", "%a %d.%m", "%a %d.%m.%Y"]:
+            try:
+                day, month = event_date.split()
+                month_int = datetime.strptime(month, "%b").month
+                event_date_converted = datetime(datetime.now().year, month_int, int(day))
+                event_date_iso = event_date_converted.date().isoformat()
+                break
+            except ValueError:
+                continue
+
+        if event_date_iso is None:
+            _LOGGER.error(f"Error parsing date: {event_date}")
+            event_date_iso = "Unknown"
 
         in_count_element = container.find('div', class_='circle-in-enrollments')
         in_count = int(in_count_element.text.strip()) if in_count_element else 0
 
-        response_event = requests.get(event_url)
-        soup_event = BeautifulSoup(response_event.text, 'html.parser')
+        # Extract the title correctly
+        event_title_element = container.find_next_sibling('div', class_='span4 event-image-container')
+        if event_title_element:
+            event_title_span = event_title_element.find('span', class_='event-name-information')
+            event_title = event_title_span.text.strip() if event_title_span else "Unknown"
+        else:
+            event_title = "Unknown"
 
-        out_link = soup_event.find('a', href=True, text=lambda x: x and 'Out' in x)
-        out_count = int(out_link.text.split()[-1]) if out_link else 0
-
-        event_location_element = container.find('div', class_='event-location')
-        event_location = event_location_element.text.strip() if event_location_element else "Unknown"
-
-        event_title_element = container.find_next_sibling('div', class_='event-name-information')
-        event_title = event_title_element.text.strip() if event_title_element else "Unknown"
-
-        _LOGGER.debug(f"Fetched informations: {event_title} - {event_url} - {event_date} - {event_location} - In: {in_count} - Out: {out_count}")
+        _LOGGER.debug(f"Fetched informations: {event_title} - {event_url} - {event_date} - {in_count}")
 
         event_info = {
-            'date': event_date,
-            'location': event_location, # Location is not available in unauthenticated response
+            'original_date': event_date_time.replace(" um ", " "),
+            'date': event_date_iso,
+            'time': event_time,
             'in_count': in_count,
-            'out_count': out_count, # Out Count is not available in unauthenticated response
             'title': event_title,
             'link': event_url,
         }
