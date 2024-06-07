@@ -109,7 +109,7 @@ def get_kadermanager_events(url):
     response = requests.get(url)
     soup = BeautifulSoup(response.text, 'html.parser')
 
-    _LOGGER.debug(f"Fetched data: {str(soup)[:100]}")  # Log the first 100 characters for debugging
+    _LOGGER.debug(f"Fetched data: {str(soup)[:20000]}")  # Log the first characters for debugging
 
     events = []
 
@@ -194,7 +194,11 @@ def get_kadermanager_events(url):
             _LOGGER.error(f"Error parsing date: {event_date}")
             event_date_iso = "Unknown"
 
-        _LOGGER.debug(f"Fetched informations: {event_title} - {event_url} - {event_date} - {in_count}")
+        # Extract location
+        event_location_element = container.find('div', text=lambda x: x and 'Am Sportpark' in x)
+        event_location = event_location_element.text.strip() if event_location_element else "Unknown"
+
+        _LOGGER.debug(f"Fetched information: {event_title} - {event_url} - {event_date} - {in_count} - {event_location}")
 
         event_info = {
             'original_date': event_date_time.replace(" um ", " "),
@@ -203,6 +207,7 @@ def get_kadermanager_events(url):
             'in_count': in_count,
             'title': event_title,
             'link': event_url,
+            'location': event_location
         }
         events.append(event_info)
 
