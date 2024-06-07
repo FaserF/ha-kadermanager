@@ -82,6 +82,7 @@ class KadermanagerSensor(SensorEntity):
         try:
             with async_timeout.timeout(30):
                 URL = f"https://{self.teamname}.kadermanager.de/events"
+                main_url = f"https://{self.teamname}.kadermanager.de"
                 login_url = f"https://{self.teamname}.kadermanager.de/sessions/new"
                 # Check if username and password are provided
                 if self.username and self.password:
@@ -91,7 +92,7 @@ class KadermanagerSensor(SensorEntity):
 
                 """Pull data from the kadermanager.de web page."""
                 _LOGGER.debug(f"Update the connection data for '{self.teamname}'")
-                events = await self.hass.async_add_executor_job(get_kadermanager_events, URL)
+                events = await self.hass.async_add_executor_job(get_kadermanager_events, URL, main_url)
                 if events:
                     limited_events = events[:5]  # Limit to the next 5 events
                     self._state = limited_events[0]['original_date']
@@ -105,16 +106,21 @@ class KadermanagerSensor(SensorEntity):
             self._available = False
             _LOGGER.error(f"Error fetching data from Kadermanager: {e}")
 
-def get_kadermanager_events(url):
+def get_kadermanager_events(url, main_url):
     response = requests.get(url)
     soup = BeautifulSoup(response.text, 'html.parser')
 
     _LOGGER.debug(f"Fetched data: {str(soup)[:20000]}")  # Log the first characters for debugging
 
+    main_response = requests.get(main_url)
+    main_soup = BeautifulSoup(main_response.text, 'html.parser')
+
     events = []
 
     event_containers = soup.find_all('div', class_='event-detailed-container')
-    for container in event_containers:
+    main_event_containers = main_soup.find_all('div', class_='circle-in-enrollments')
+
+    for idx, container in enumerate(event_containers):
         _LOGGER.debug(f"Container: {container}")
 
         # Extract the event title
@@ -125,21 +131,21 @@ def get_kadermanager_events(url):
             _LOGGER.debug(f"Event title link not found, container: {container}")
             event_title = "Unknown"
 
-        # Find the element with class 'circle-in-enrollments'
-        circle_in_enrollments = container.find_all('div', class_='circle-in-enrollments')
-        _LOGGER.debug(f"Searching in_count in: {circle_in_enrollments}")
-        # Check if the element is found and extract the text
-        if circle_in_enrollments:
-            in_count = circle_in_enrollments.text.strip()
+        # Set in_count based on index
+        if idx < 2:
+            if main_event_containers:
+                in_count_element = main_event_containers[idx]
+                in_count = in_count_element.text.strip() if in_count_element else "Unknown"
+                # Convert in_count to an integer if possible
+                try:
+                    in_count = int(in_count)
+                except ValueError:
+                    _LOGGER.error(f"Error parsing in_count: {in_count}")
+                    in_count = 0
+            else:
+                in_count = "Unknown"
         else:
             in_count = "Unknown"
-
-        # Convert in_count to an integer if possible
-        try:
-            in_count = int(in_count)
-        except ValueError:
-            _LOGGER.error(f"Error parsing in_count: {in_count}")
-            in_count = 0
 
         _LOGGER.debug(f"In count: {in_count}")
 
