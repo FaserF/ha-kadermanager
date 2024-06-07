@@ -28,7 +28,6 @@
       "already_configured": "This kadermanager is already configured"
     },
     "error": {
-      "invalid_station": "Invalid Kadermanager",
       "unknown": "Unknown Error"
     }
   }

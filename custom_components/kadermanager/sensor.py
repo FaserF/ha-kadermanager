@@ -43,8 +43,8 @@ class KadermanagerSensor(SensorEntity):
         super().__init__()
         self._name = f"kadermanager_{config[CONF_TEAM_NAME]}"
         self.teamname = config[CONF_TEAM_NAME]
-        self.username = config[CONF_USERNAME]
-        self.password = config[CONF_PASSWORD]
+        self.username = config.get(CONF_USERNAME)
+        self.password = config.get(CONF_PASSWORD)
         self._state = None
         self._available = True
         self.hass = hass
