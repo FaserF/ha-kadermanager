@@ -5,7 +5,9 @@
       "init": {
         "description": "Gib hier deine Kadermanager Infos an für die Suchabfragen.",
         "data": {
-          "team_name": "Team Name"
+          "team_name": "Team Name",
+          "username": "Username (Email) für Login",
+          "password": "Passwort für Login"
         }
       }
     }
@@ -16,7 +18,9 @@
       "user": {
         "description": "Gib hier deine Kadermanager Infos an für die Suchabfragen.",
         "data": {
-          "team_name": "Team Name"
+          "team_name": "Team Name",
+          "username": "Username (Email) für Login",
+          "password": "Passwort für Login"
         }
       }
     },

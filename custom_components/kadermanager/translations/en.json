@@ -5,7 +5,9 @@
       "init": {
         "description": "Submit your kadermanager details for the search queries.",
         "data": {
-          "team_name": "Team Name"
+          "team_name": "Team Name",
+          "username": "Username (Email) for Sign in",
+          "password": "Password for Sign in"
         }
       }
     }
@@ -16,7 +18,9 @@
       "user": {
         "description": "Submit your kadermanager details for the search queries.",
         "data": {
-          "team_name": "Team Name"
+          "team_name": "Team Name",
+          "username": "Username (Email) for Sign in",
+          "password": "Password for Sign in"
         }
       }
     },

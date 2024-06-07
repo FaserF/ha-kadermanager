@@ -1,7 +1,7 @@
 """kadermanager sensor platform."""
 from datetime import timedelta, datetime
 import logging
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Dict, Optional
 import requests
 from bs4 import BeautifulSoup
 
@@ -12,19 +12,12 @@ from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
 from homeassistant.const import ATTR_ATTRIBUTION
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.typing import (
-    ConfigType,
-    DiscoveryInfoType,
-)
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt_util
 import voluptuous as vol
 
-from .const import (
-    CONF_TEAM_NAME,
-    ATTR_DATA,
-    DOMAIN,
-)
+from .const import CONF_TEAM_NAME, CONF_USERNAME, CONF_PASSWORD, ATTR_DATA, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 SCAN_INTERVAL = timedelta(minutes=30)
@@ -51,6 +44,8 @@ class KadermanagerSensor(SensorEntity):
         super().__init__()
         self._name = f"kadermanager_{config[CONF_TEAM_NAME]}"
         self.teamname = config[CONF_TEAM_NAME]
+        self.username = config[CONF_USERNAME]
+        self.password = config[CONF_PASSWORD]
         self._state = None
         self._available = True
         self.hass = hass
@@ -91,6 +86,12 @@ class KadermanagerSensor(SensorEntity):
 
                 # Login URL
                 login_url = f"https://{self.teamname}.kadermanager.de/sessions/new"
+                payload = {
+                    'username': self.username,
+                    'password': self.password
+                }
+                await self.hass.async_add_executor_job(login_and_fetch_data, payload, login_url, URL)
+
                 """Pull data from the kadermanager.de web page."""
                 _LOGGER.debug(f"Update the connection data for '{self.teamname}'")
                 events = await self.hass.async_add_executor_job(get_kadermanager_events, URL)
@@ -193,6 +194,18 @@ def get_kadermanager_events(url):
         events.append(event_info)
 
     return events
+
+def login_and_fetch_data(payload, login_url, URL):
+    with requests.Session() as session:
+        # Anmeldung durchführen
+        post = session.post(login_url, data=payload)
+
+        # Überprüfen, ob die Anmeldung erfolgreich war
+        if post.status_code == 200:
+            _LOGGER.debug(f"Login successful {login_url}")
+            # Hier geht es weiter mit der Verarbeitung des HTML-Codes, um die benötigten Informationen zu extrahieren
+        else:
+            _LOGGER.error(f"Login failed: {login_url}")
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
     add_entities([KadermanagerSensor(config, hass)])

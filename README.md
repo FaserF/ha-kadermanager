@@ -26,6 +26,16 @@ Go to Configuration -> Integrations and click on "add integration". Then search 
 
 ### Configuration Variables
 - **team name**: input your kadermanager teamname (it usually is your kadermanager subdomain, f.e.: teamname.kadermanager.de)
+- **username** (optional - without less informations can be fetched): input your kadermanager username (usually an email)
+- **password** (optional - without less informations can be fetched): input your kadermanager password
+
+## Sensor Attributes
+- original_date: Displays the Date and Time for the event
+- date: extracted date from original_date
+- time: extraced time from original_date
+- in_count (only available when signed in): Current count of people in for the event
+- title: Event title
+- link: Link to the event
 
 ## Bug reporting
 Open an issue over at [github issues](https://github.com/FaserF/ha-kadermanager/issues). Please prefer sending over a log with debugging enabled.

@@ -10,7 +10,9 @@ from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
 
 from .const import (  # pylint: disable=unused-import
-    CONF_TEAM_NAME
+    CONF_TEAM_NAME,
+    CONF_USERNAME,
+    CONF_PASSWORD
 )
 
 DOMAIN = "kadermanager"
@@ -41,6 +43,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             data_schema = vol.Schema(
             {
                 vol.Required(CONF_TEAM_NAME): str,
+                vol.Required(CONF_USERNAME): str,
+                vol.Required(CONF_PASSWORD): str,
             },
             ),
         )
@@ -67,6 +71,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         data_schema = vol.Schema(
             {
                 vol.Required(CONF_TEAM_NAME): str,
+                vol.Optional(CONF_USERNAME): str,
+                vol.Optional(CONF_PASSWORD): str,
             },
         )
 
