@@ -316,11 +316,12 @@ class KadermanagerSensor(SensorEntity):
                 login_url = f"https://{self.teamname}.kadermanager.de/sessions/new"
                 # Check if username and password are provided
                 if self.username and self.password:
-                    try:
-                        await self.hass.async_add_executor_job(login_and_fetch_data, self.username, self.password, login_url, URL)
-                    except Exception as e:
-                        _LOGGER.error(f"Error during login: {e}")
-                        return
+                    _LOGGER.warning("Skipping login, since bot logins are blocked from website")
+                    #try:
+                    #    await self.hass.async_add_executor_job(login_and_fetch_data, self.username, self.password, login_url, URL)
+                    #except Exception as e:
+                    #    _LOGGER.error(f"Error during login: {e}")
+                    #    return
                 else:
                     _LOGGER.debug("Username or password not provided, skipping login.")
 
@@ -453,30 +454,33 @@ def get_kadermanager_events(url):
     return events
 
 def login_and_fetch_data(username, password, login_url, URL):
-    with requests.Session() as session:
-        # Fetch the login page to obtain the CSRF token
-        login_response = session.get(login_url)
-        soup = BeautifulSoup(login_response.content, 'html.parser')
-        csrf_token = soup.find('input', {'name': 'authenticity_token'})['value']
+    # Define headers with a fake user agent
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+    }
 
-        # Create login data with username, password, and CSRF token
+    with requests.Session() as session:
+        # Try signing in with provided login credentials
         login_data = {
             'login_name': username,
-            'password': password,
-            'authenticity_token': csrf_token
+            'password': password
         }
 
-        # Log in
-        post = session.post(login_url, data=login_data)
+        # Send a GET request to the login page to get the CSRF token
+        login_response = session.get(login_url, headers=headers)
+        soup = BeautifulSoup(login_response.content, 'html.parser')
+        csrf_token = soup.find('input', {'name': 'authenticity_token'})['value']
+        login_data['authenticity_token'] = csrf_token
 
-        # Check the login status
+        # Send a POST request with login data
+        post = session.post(login_url, data=login_data, headers=headers)
+
+        # Check login for success
         if post.status_code == 200:
             _LOGGER.debug(f"Login successful: {login_url}")
-            _LOGGER.debug(f"Login response: {post.text}")
-
-            # Redirect to the desired URL after successful login
-            response = session.get(URL)
+            response = session.get(URL, headers=headers)
             soup = BeautifulSoup(response.content, 'html.parser')
+            # Now you can continue to scrape the data from the page
         else:
             _LOGGER.error(f"Login failed: {login_url} - Username: {username} - Status: {post.status_code} - Some attribute informations won't be available.")
             _LOGGER.debug(f"Login response: {post.text}")

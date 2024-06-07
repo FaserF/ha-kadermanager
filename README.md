@@ -26,6 +26,7 @@ Go to Configuration -> Integrations and click on "add integration". Then search 
 
 ### Configuration Variables
 - **team name**: input your kadermanager teamname (it usually is your kadermanager subdomain, f.e.: teamname.kadermanager.de)
+#### IMPORTANT: Currently it looks like sign in by "bots" are blocked from kadermanager, therefore login wont work (yet)
 - **username** (optional - without less informations can be fetched): input your kadermanager username (usually an email)
 - **password** (optional - without less informations can be fetched): input your kadermanager password
 
@@ -34,7 +35,7 @@ Go to Configuration -> Integrations and click on "add integration". Then search 
 - date: extracted date from original_date
 - time: extraced time from original_date
 - in_count (only available when signed in): Current count of people in for the event
-- title: Event title
+- title (only available when signed in): Event title
 - link: Link to the event
 
 ## Bug reporting
