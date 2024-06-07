@@ -27,7 +27,7 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-SCAN_INTERVAL = timedelta(minutes=2)
+SCAN_INTERVAL = timedelta(minutes=30)
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigType, async_add_entities: AddEntitiesCallback
@@ -90,16 +90,19 @@ class KadermanagerSensor(SensorEntity):
                 URL = f"https://{self.teamname}.kadermanager.de/events"
                 """Pull data from the kadermanager.de web page."""
                 _LOGGER.debug(f"Update the connection data for '{self.teamname}'")
-                events = await self.hass.async_add_executor_job(get_kadermanager_events, URL) 
+                events = await self.hass.async_add_executor_job(get_kadermanager_events, URL)
                 if events:
                     self._state = events[0]['date']
                     self._attributes = {
-                        'location': events[0]['location'],
+                        'location': events[0].get('location', 'Unknown'),
                         'in_count': events[0]['in_count'],
-                        'out_count': events[0]['out_count'],
+                        'out_count': events[0].get('out_count', 'Unknown'),
                         'title': events[0]['title'],
                         'link': events[0]['link'],
                     }
+                else:
+                    self._state = "No events found"
+                    self._attributes = {}
         except Exception as e:
             self._available = False
             _LOGGER.error(f"Error fetching data from Kadermanager: {e}")
@@ -108,51 +111,44 @@ def get_kadermanager_events(url):
     response = requests.get(url)
     soup = BeautifulSoup(response.text, 'html.parser')
 
-    _LOGGER.debug(f"Fetched data: {response}")
+    _LOGGER.debug(f"Fetched data: {response.text[:1000]}")  # Log the first 1000 characters for debugging
 
     events = []
 
-    event_links = soup.find_all('a', href=True, style="color: inherit;")
-    for link in event_links:
-        event_url = link['href']
-        event_date_element = link.find('h4')
-        event_location_element = link.find('div')
-
-        if event_date_element is None or event_location_element is None:
+    event_containers = soup.find_all('div', class_='event-information-container')
+    for container in event_containers:
+        event_link_element = container.find('a', href=True)
+        if not event_link_element:
             continue
 
-        event_date = event_date_element.text.strip()
-        event_location = event_location_element.text.strip()
+        event_url = event_link_element['href']
+        event_date_element = container.find('h4')
+        event_date = event_date_element.text.strip() if event_date_element else "Unknown"
+
+        in_count_element = container.find('div', class_='circle-in-enrollments')
+        in_count = int(in_count_element.text.strip()) if in_count_element else 0
 
         response_event = requests.get(event_url)
         soup_event = BeautifulSoup(response_event.text, 'html.parser')
 
-        in_link = soup_event.find('a', href=True, text=lambda x: x and 'In' in x)
-        in_count = int(in_link.text.split()[-1]) if in_link else 0
-
         out_link = soup_event.find('a', href=True, text=lambda x: x and 'Out' in x)
         out_count = int(out_link.text.split()[-1]) if out_link else 0
 
-        event_title_element = soup_event.find('div', class_='event-detailed-label event_type_1')
-        if event_title_element is None:
-            continue
+        event_location_element = container.find('div', class_='event-location')
+        event_location = event_location_element.text.strip() if event_location_element else "Unknown"
 
-        event_title_link = event_title_element.find('a')
-        if event_title_link is None:
-            continue
+        event_title_element = container.find_next_sibling('div', class_='event-name-information')
+        event_title = event_title_element.text.strip() if event_title_element else "Unknown"
 
-        event_title = event_title_link.text.strip().split('·')[0].strip()
-        event_link = event_title_link['href']
-
-        _LOGGER.debug(f"Fetched informations: {event_title} - {event_link} - {event_date} - {event_location} - In: {in_count} - Out: {in_count}")
+        _LOGGER.debug(f"Fetched informations: {event_title} - {event_url} - {event_date} - {event_location} - In: {in_count} - Out: {out_count}")
 
         event_info = {
             'date': event_date,
-            'location': event_location,
+            'location': event_location, # Location is not available in unauthenticated response
             'in_count': in_count,
-            'out_count': in_count,
+            'out_count': out_count, # Out Count is not available in unauthenticated response
             'title': event_title,
-            'link': event_link,
+            'link': event_url,
         }
         events.append(event_info)
 
