@@ -41,7 +41,7 @@ class KadermanagerSensor(SensorEntity):
 
     def __init__(self, config, hass: HomeAssistant):
         super().__init__()
-        self._name = f"kadermanager_{config[CONF_TEAM_NAME]}"
+        self._name = f"Kadermanager {config[CONF_TEAM_NAME]}"
         self.teamname = config[CONF_TEAM_NAME]
         self.username = config.get(CONF_USERNAME)
         self.password = config.get(CONF_PASSWORD)

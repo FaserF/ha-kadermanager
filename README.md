@@ -34,10 +34,12 @@ Go to Configuration -> Integrations and click on "add integration". Then search 
 - original_date: Displays the Date and Time for the event
 - date: extracted date from original_date
 - time: extraced time from original_date
-- in_count (only available when signed in): Current count of people in for the event
+- in_count: Current count of people in for the event
 - title: Event title
 - link: Link to the event
 - location: Location of the event
+
+more attributes could be done, when sign in is working
 
 ## Bug reporting
 Open an issue over at [github issues](https://github.com/FaserF/ha-kadermanager/issues). Please prefer sending over a log with debugging enabled.
