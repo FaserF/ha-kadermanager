@@ -3,6 +3,8 @@ The `kadermanager` sensor will give informations about events and participants
 
 <img src="https://assets1.nimenhuuto.com/assets/logos/kadermanager.de/logo_h128-9f99c175236041ce4e42e770ed364faad6945c046539b14d1828720df6baa426.png" alt="Kadermanager" width="300px">
 
+<img src="images/sensor.png" alt="Kadermanager Sensor" width="300px">
+
 ## Installation
 ### 1. Using HACS (recommended way)
 
@@ -26,7 +28,8 @@ Go to Configuration -> Integrations and click on "add integration". Then search 
 
 ### Configuration Variables
 - **team name**: input your kadermanager teamname (it usually is your kadermanager subdomain, f.e.: teamname.kadermanager.de)
-#### IMPORTANT: Currently it looks like sign in by "bots" are blocked from kadermanager, therefore login wont work (yet)
+
+**IMPORTANT: Currently it looks like sign in by "bots" are blocked from kadermanager, therefore login wont work (yet)**
 - **username** (optional - without less informations can be fetched): input your kadermanager username (usually an email)
 - **password** (optional - without less informations can be fetched): input your kadermanager password
 
