@@ -114,11 +114,16 @@ def get_kadermanager_events(url):
 
     event_containers = soup.find_all('div', class_='event-information-container')
     for container in event_containers:
-        event_link_element = container.find('a', href=True)
-        if not event_link_element:
+        event_link_elements = container.find_all('a', href=True)  # Find all <a> tags with href attribute
+        event_url = None
+        for event_link_element in event_link_elements:
+            if "player" not in event_link_element['href']:
+                event_url = event_link_element['href']
+                break
+
+        if not event_url:
             continue
 
-        event_url = event_link_element['href']
         event_date_element = container.find('h4')
         event_date_time = event_date_element.text.strip() if event_date_element else "Unknown"
 
