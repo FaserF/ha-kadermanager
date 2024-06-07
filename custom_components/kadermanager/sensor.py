@@ -157,16 +157,31 @@ def get_kadermanager_events(url):
             event_date = event_date_time
             event_time = "Unknown"
 
+        # Remove the day of the week from the date
+        event_date_parts = event_date.split()
+        if len(event_date_parts) > 1:
+            event_date = event_date_parts[1]
+        else:
+            event_date = event_date_parts[0]
+
+        # Ensure the date has no additional periods
+        if event_date.endswith('.'):
+            event_date = event_date[:-1]
+
+        # Add the current year to the event date if not already present
+        current_year = datetime.now().year
+        event_date += f".{current_year}"
+
         # Parse the date using multiple formats
         event_date_iso = None
-        for date_format in ["%a %d.%m.", "%a %d.%m", "%a %d.%m.%Y"]:
+        for date_format in ["%d.%m.%Y"]:
             try:
-                day, month = event_date.split()
-                month_int = datetime.strptime(month, "%b").month
-                event_date_converted = datetime(datetime.now().year, month_int, int(day))
-                event_date_iso = event_date_converted.date().isoformat()
+                event_date_parsed = datetime.strptime(event_date, date_format)
+                event_date_iso = event_date_parsed.date().isoformat()
+                _LOGGER.debug(f"Successfully parsed date '{event_date}' as '{event_date_iso}'")
                 break
-            except ValueError:
+            except ValueError as ve:
+                _LOGGER.debug(f"Failed to parse date '{event_date}' with format '{date_format}': {ve}")
                 continue
 
         if event_date_iso is None:
@@ -176,9 +191,19 @@ def get_kadermanager_events(url):
         # Extract the title correctly
         event_title_element = container.find_next_sibling('div', class_='span4 event-image-container')
         if event_title_element:
-            event_title_span = event_title_element.find('span', class_='event-name-information')
-            event_title = event_title_span.text.strip() if event_title_span else "Unknown"
+            _LOGGER.debug(f"Found event title element: {event_title_element}")
+            event_title_span = container.find('span', class_='event-name-information')
+            if event_title_span:
+                _LOGGER.debug(f"Found event title span: {event_title_span}")
+                event_title = event_title_span.text.strip()
+            else:
+                _LOGGER.debug(f"Event title span not found, container siblings: {container.find_next_siblings()}")
+                _LOGGER.debug(f"Full HTML container: {container}")
+                event_title = "Unknown"
+
         else:
+            # Log surrounding HTML for better debugging
+            _LOGGER.debug(f"Event title element not found, container siblings: {container.find_next_siblings()}")
             event_title = "Unknown"
 
         _LOGGER.debug(f"Fetched informations: {event_title} - {event_url} - {event_date} - {in_count}")
@@ -203,9 +228,10 @@ def login_and_fetch_data(payload, login_url, URL):
         # Überprüfen, ob die Anmeldung erfolgreich war
         if post.status_code == 200:
             _LOGGER.debug(f"Login successful {login_url}")
-            # Hier geht es weiter mit der Verarbeitung des HTML-Codes, um die benötigten Informationen zu extrahieren
+            _LOGGER.debug(f"Login response: {post.text}")
         else:
-            _LOGGER.error(f"Login failed: {login_url}")
+            _LOGGER.error(f"Login failed: {login_url} - Status: {post.status_code}")
+            _LOGGER.debug(f"Login response: {post.text}")
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
     add_entities([KadermanagerSensor(config, hass)])
