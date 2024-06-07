@@ -88,6 +88,9 @@ class KadermanagerSensor(SensorEntity):
         try:
             with async_timeout.timeout(30):
                 URL = f"https://{self.teamname}.kadermanager.de/events"
+
+                # Login URL
+                login_url = f"https://{self.teamname}.kadermanager.de/sessions/new"
                 """Pull data from the kadermanager.de web page."""
                 _LOGGER.debug(f"Update the connection data for '{self.teamname}'")
                 events = await self.hass.async_add_executor_job(get_kadermanager_events, URL)
@@ -114,6 +117,25 @@ def get_kadermanager_events(url):
 
     event_containers = soup.find_all('div', class_='event-information-container')
     for container in event_containers:
+        _LOGGER.debug(f"Container: {container}")
+        # Find the element with class 'circle-in-enrollments'
+        circle_in_enrollments = container.find('div', class_='circle-in-enrollments')
+        # Check if the element is found and extract the text
+        if circle_in_enrollments:
+            _LOGGER.debug(f"Extracted in_count text: {circle_in_enrollments}")
+            in_count = circle_in_enrollments.text.strip()
+        else:
+            in_count = "Unknown"
+
+        # Convert in_count to an integer if possible
+        try:
+            in_count = int(in_count)
+        except ValueError:
+            _LOGGER.error(f"Error parsing in_count: {in_count}")
+            in_count = 0
+
+        _LOGGER.debug(f"In count: {in_count}")
+
         event_link_elements = container.find_all('a', href=True)  # Find all <a> tags with href attribute
         event_url = None
         for event_link_element in event_link_elements:
@@ -122,7 +144,7 @@ def get_kadermanager_events(url):
                 break
 
         if not event_url:
-            continue
+            event_url = url  # Use the main URL as a default link if no suitable link is found
 
         event_date_element = container.find('h4')
         event_date_time = event_date_element.text.strip() if event_date_element else "Unknown"
@@ -149,9 +171,6 @@ def get_kadermanager_events(url):
         if event_date_iso is None:
             _LOGGER.error(f"Error parsing date: {event_date}")
             event_date_iso = "Unknown"
-
-        in_count_element = container.find('div', class_='circle-in-enrollments')
-        in_count = int(in_count_element.text.strip()) if in_count_element else 0
 
         # Extract the title correctly
         event_title_element = container.find_next_sibling('div', class_='span4 event-image-container')
