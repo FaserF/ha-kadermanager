@@ -1,13 +1,14 @@
 {
   "options": {
-    "flow_title": "Setup Kadermanager:{entity_name}",
+    "flow_title": "Setup Kadermanager: {entity_name}",
     "step": {
       "init": {
-        "description": "Submit your kadermanager details for the search queries.",
+        "description": "Submit your Kadermanager details for the search queries.",
         "data": {
           "team_name": "Team Name",
           "username": "Username (Email) for Sign in",
-          "password": "Password for Sign in"
+          "password": "Password for Sign in",
+          "update_interval": "Update Interval (minutes)"
         }
       }
     }
@@ -16,16 +17,17 @@
     "flow_title": "Setup Kadermanager",
     "step": {
       "user": {
-        "description": "Submit your kadermanager details for the search queries.",
+        "description": "Submit your Kadermanager details for the search queries.",
         "data": {
           "team_name": "Team Name",
           "username": "Username (Email) for Sign in",
-          "password": "Password for Sign in"
+          "password": "Password for Sign in",
+          "update_interval": "Update Interval (minutes)"
         }
       }
     },
     "abort": {
-      "already_configured": "This kadermanager is already configured"
+      "already_configured": "This Kadermanager is already configured"
     },
     "error": {
       "unknown": "Unknown Error"

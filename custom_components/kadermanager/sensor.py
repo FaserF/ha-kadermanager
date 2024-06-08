@@ -16,13 +16,12 @@ from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt_util
 import voluptuous as vol
 
-from .const import CONF_TEAM_NAME, CONF_USERNAME, CONF_PASSWORD, ATTR_DATA, DOMAIN
+from .const import CONF_TEAM_NAME, CONF_USERNAME, CONF_PASSWORD, ATTR_DATA, DOMAIN, CONF_UPDATE_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
-SCAN_INTERVAL = timedelta(minutes=30)
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigType, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant, entry: config_entries.ConfigEntry, async_add_entities: AddEntitiesCallback
 ):
     """Setup sensors from a config entry created in the integrations UI."""
     config = hass.data[DOMAIN][entry.entry_id]
@@ -45,6 +44,7 @@ class KadermanagerSensor(SensorEntity):
         self.teamname = config[CONF_TEAM_NAME]
         self.username = config.get(CONF_USERNAME)
         self.password = config.get(CONF_PASSWORD)
+        self.update_interval = timedelta(minutes=config.get(CONF_UPDATE_INTERVAL, 30))
         self._state = None
         self._available = True
         self.hass = hass
@@ -98,16 +98,27 @@ class KadermanagerSensor(SensorEntity):
                     self._state = limited_events[0]['original_date']
                     self._attributes = {
                         'events': limited_events,
-                        'last_updated': datetime.now().isoformat()  # Add the last updated timestamp
+                        'last_updated': datetime.now().isoformat()
                     }
                 else:
                     self._state = "No events found"
-                    self._attributes = {
-                        'last_updated': datetime.now().isoformat()  # Add the last updated timestamp
-                    }
+                    self._attributes = {}
         except Exception as e:
             self._available = False
             _LOGGER.error(f"Error fetching data from Kadermanager: {e}")
+
+    @property
+    def should_poll(self):
+        """Return the polling state."""
+        return True
+
+    async def async_added_to_hass(self):
+        """When entity is added to hass."""
+        self.async_on_remove(
+            self.hass.helpers.event.async_track_time_interval(
+                self.async_update, self.update_interval
+            )
+        )
 
 def get_kadermanager_events(url, main_url):
     response = requests.get(url)
@@ -133,20 +144,6 @@ def get_kadermanager_events(url, main_url):
         else:
             _LOGGER.debug(f"Event title link not found, container: {container}")
             event_title = "Unknown"
-
-        # Extract the event type and clean the title
-        event_types = ["Training", "Spiel", "Sonstiges"]
-        event_type = next((etype for etype in event_types if etype in event_title), "Unbekannt")
-        if event_type != "Unbekannt":
-            # Remove "Training · ", "Spiel · ", or "Sonstiges · " from title
-            cleaned_title = event_title.replace(event_type + " · ", "").strip()
-            if not cleaned_title:
-                cleaned_title = event_type
-        else:
-            cleaned_title = event_title
-
-        # Ensure type is clean
-        event_type = event_type.replace(" · ", "").strip()
 
         # Set in_count based on index
         if idx < 2:
@@ -223,15 +220,25 @@ def get_kadermanager_events(url, main_url):
 
         _LOGGER.debug(f"Fetched information: {event_title} - {event_url} - {event_date} - {in_count} - {event_location}")
 
+        event_type = None
+        for possible_type in ["Training", "Spiel", "Sonstiges"]:
+            if possible_type in event_title:
+                event_type = possible_type
+                event_title = event_title.replace(possible_type, "").replace(" · ", "").strip()
+                break
+
+        if event_type is None:
+            event_type = "Unknown"
+
         event_info = {
             'original_date': event_date_time.replace(" um ", " "),
             'date': event_date_iso,
             'time': event_time,
             'in_count': in_count,
-            'title': cleaned_title,
+            'title': event_title,
             'link': event_url,
             'location': event_location,
-            'type': event_type
+            'type': event_type,
         }
         events.append(event_info)
 
@@ -247,35 +254,27 @@ def login_and_fetch_data(username, password, login_url, URL):
         # Try signing in with provided login credentials
         login_data = {
             'login_name': username,
-            'login_password': password
+            'password': password
         }
-        response = session.post(login_url, data=login_data, headers=headers)
 
-        if response.status_code != 200:
-            raise Exception("Login failed")
+        # Send a GET request to the login page to get the CSRF token
+        login_response = session.get(login_url, headers=headers)
+        soup = BeautifulSoup(login_response.content, 'html.parser')
+        csrf_token = soup.find('input', {'name': 'authenticity_token'})['value']
+        login_data['authenticity_token'] = csrf_token
 
-        # Fetch the data from the events page after logging in
-        response = session.get(URL, headers=headers)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        events = extract_event_data(soup)
+        # Send a POST request with login data
+        post = session.post(login_url, data=login_data, headers=headers)
 
-    return events
+        # Check login for success
+        if post.status_code == 200:
+            _LOGGER.debug(f"Login successful: {login_url}")
+            response = session.get(URL, headers=headers)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            # Now you can continue to scrape the data from the page
+        else:
+            _LOGGER.error(f"Login failed: {login_url} - Username: {username} - Status: {post.status_code} - Some attribute informations won't be available.")
+            _LOGGER.debug(f"Login response: {post.text}")
 
-def extract_event_data(soup):
-    events = []
-    event_containers = soup.find_all('div', class_='event-detailed-container')
-
-    for container in event_containers:
-        event_title_element = container.find('a', class_='event-title-link')
-        event_title = event_title_element.text.strip() if event_title_element else "Unknown"
-
-        event_date_element = container.find('h4')
-        event_date = event_date_element.text.strip() if event_date_element else "Unknown"
-
-        event_info = {
-            'title': event_title,
-            'date': event_date
-        }
-        events.append(event_info)
-
-    return events
+def setup_platform(hass, config, add_entities, discovery_info=None):
+    add_entities([KadermanagerSensor(config, hass)])

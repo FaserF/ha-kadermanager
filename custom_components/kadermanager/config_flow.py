@@ -9,16 +9,15 @@ from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 import homeassistant.helpers.config_validation as cv
 
-from .const import (  # pylint: disable=unused-import
+from .const import (
     CONF_TEAM_NAME,
     CONF_USERNAME,
-    CONF_PASSWORD
+    CONF_PASSWORD,
+    CONF_UPDATE_INTERVAL,
+    DOMAIN,
 )
 
-DOMAIN = "kadermanager"
-
 _LOGGER = logging.getLogger(__name__)
-
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
@@ -40,12 +39,13 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="init",
-            data_schema = vol.Schema(
-            {
-                vol.Required(CONF_TEAM_NAME): str,
-                vol.Required(CONF_USERNAME): str,
-                vol.Required(CONF_PASSWORD): str,
-            },
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_TEAM_NAME, default=__get_option(CONF_TEAM_NAME, "")): str,
+                    vol.Optional(CONF_USERNAME, default=__get_option(CONF_USERNAME, "")): str,
+                    vol.Optional(CONF_PASSWORD, default=__get_option(CONF_PASSWORD, "")): str,
+                    vol.Required(CONF_UPDATE_INTERVAL, default=__get_option(CONF_UPDATE_INTERVAL, 30)): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
+                },
             ),
         )
 
@@ -73,6 +73,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_TEAM_NAME): str,
                 vol.Optional(CONF_USERNAME): str,
                 vol.Optional(CONF_PASSWORD): str,
+                vol.Required(CONF_UPDATE_INTERVAL, default=30): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
             },
         )
 
