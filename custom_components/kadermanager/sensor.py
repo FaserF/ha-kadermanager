@@ -131,6 +131,20 @@ def get_kadermanager_events(url, main_url):
             _LOGGER.debug(f"Event title link not found, container: {container}")
             event_title = "Unknown"
 
+        # Extract the event type and clean the title
+        event_types = ["Training", "Spiel", "Sonstiges"]
+        event_type = next((etype for etype in event_types if etype in event_title), "Unbekannt")
+        if event_type != "Unbekannt":
+            # Remove "Training · ", "Spiel · ", or "Sonstiges · " from title
+            cleaned_title = event_title.replace(event_type + " · ", "").strip()
+            if not cleaned_title:
+                cleaned_title = event_type
+        else:
+            cleaned_title = event_title
+
+        # Ensure type is clean
+        event_type = event_type.replace(" · ", "").strip()
+
         # Set in_count based on index
         if idx < 2:
             if main_event_containers:
@@ -211,9 +225,10 @@ def get_kadermanager_events(url, main_url):
             'date': event_date_iso,
             'time': event_time,
             'in_count': in_count,
-            'title': event_title,
+            'title': cleaned_title,
             'link': event_url,
-            'location': event_location
+            'location': event_location,
+            'type': event_type
         }
         events.append(event_info)
 
