@@ -97,11 +97,14 @@ class KadermanagerSensor(SensorEntity):
                     limited_events = events[:5]  # Limit to the next 5 events
                     self._state = limited_events[0]['original_date']
                     self._attributes = {
-                        'events': limited_events
+                        'events': limited_events,
+                        'last_updated': datetime.now().isoformat()  # Add the last updated timestamp
                     }
                 else:
                     self._state = "No events found"
-                    self._attributes = {}
+                    self._attributes = {
+                        'last_updated': datetime.now().isoformat()  # Add the last updated timestamp
+                    }
         except Exception as e:
             self._available = False
             _LOGGER.error(f"Error fetching data from Kadermanager: {e}")
@@ -244,27 +247,35 @@ def login_and_fetch_data(username, password, login_url, URL):
         # Try signing in with provided login credentials
         login_data = {
             'login_name': username,
-            'password': password
+            'login_password': password
         }
+        response = session.post(login_url, data=login_data, headers=headers)
 
-        # Send a GET request to the login page to get the CSRF token
-        login_response = session.get(login_url, headers=headers)
-        soup = BeautifulSoup(login_response.content, 'html.parser')
-        csrf_token = soup.find('input', {'name': 'authenticity_token'})['value']
-        login_data['authenticity_token'] = csrf_token
+        if response.status_code != 200:
+            raise Exception("Login failed")
 
-        # Send a POST request with login data
-        post = session.post(login_url, data=login_data, headers=headers)
+        # Fetch the data from the events page after logging in
+        response = session.get(URL, headers=headers)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        events = extract_event_data(soup)
 
-        # Check login for success
-        if post.status_code == 200:
-            _LOGGER.debug(f"Login successful: {login_url}")
-            response = session.get(URL, headers=headers)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            # Now you can continue to scrape the data from the page
-        else:
-            _LOGGER.error(f"Login failed: {login_url} - Username: {username} - Status: {post.status_code} - Some attribute informations won't be available.")
-            _LOGGER.debug(f"Login response: {post.text}")
+    return events
 
-def setup_platform(hass, config, add_entities, discovery_info=None):
-    add_entities([KadermanagerSensor(config, hass)])
+def extract_event_data(soup):
+    events = []
+    event_containers = soup.find_all('div', class_='event-detailed-container')
+
+    for container in event_containers:
+        event_title_element = container.find('a', class_='event-title-link')
+        event_title = event_title_element.text.strip() if event_title_element else "Unknown"
+
+        event_date_element = container.find('h4')
+        event_date = event_date_element.text.strip() if event_date_element else "Unknown"
+
+        event_info = {
+            'title': event_title,
+            'date': event_date
+        }
+        events.append(event_info)
+
+    return events
