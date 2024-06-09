@@ -1,11 +1,9 @@
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 import logging
-from typing import Any, Dict, Optional
 import requests
 from bs4 import BeautifulSoup
-
 import async_timeout
-
+from typing import Optional, List, Dict
 from homeassistant import config_entries, core
 from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
 from homeassistant.const import ATTR_ATTRIBUTION
@@ -15,7 +13,6 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt_util
 import voluptuous as vol
-
 from .const import CONF_TEAM_NAME, CONF_USERNAME, CONF_PASSWORD, ATTR_DATA, DOMAIN, CONF_UPDATE_INTERVAL
 
 _LOGGER = logging.getLogger(__name__)
@@ -83,7 +80,6 @@ class KadermanagerSensor(SensorEntity):
             with async_timeout.timeout(30):
                 URL = f"https://{self.teamname}.kadermanager.de/events"
                 main_url = f"https://{self.teamname}.kadermanager.de"
-                login_url = f"https://{self.teamname}.kadermanager.de/sessions/new"
                 # Check if username and password are provided
                 if self.username and self.password:
                     _LOGGER.warning("Skipping login, since bot logins are blocked from website")
@@ -194,31 +190,34 @@ def get_kadermanager_events(url, main_url):
         if event_date.endswith('.'):
             event_date = event_date[:-1]
 
-        # Add the current year to the event date if not already present
+        # Determine the correct year for the event date
         current_year = datetime.now().year
-        event_date += f".{current_year}"
+        if '.' in event_date:
+            # Check if the year is already in the date
+            if len(event_date.split('.')) == 3:
+                event_date_with_year = event_date
+            else:
+                event_date_with_year = f"{event_date}.{current_year}"
+        else:
+            event_date_with_year = f"{event_date}.{current_year}"
 
         # Parse the date using multiple formats
         event_date_iso = None
-        for date_format in ["%d.%m.%Y"]:
-            try:
-                event_date_parsed = datetime.strptime(event_date, date_format)
-                event_date_iso = event_date_parsed.date().isoformat()
-                _LOGGER.debug(f"Successfully parsed date '{event_date}' as '{event_date_iso}'")
-                break
-            except ValueError as ve:
-                _LOGGER.debug(f"Failed to parse date '{event_date}' with format '{date_format}': {ve}")
-                continue
-
-        if event_date_iso is None:
-            _LOGGER.error(f"Error parsing date: {event_date}")
+        try:
+            event_date_parsed = datetime.strptime(event_date_with_year, "%d.%m.%Y")
+            if event_date_parsed < datetime.now():
+                event_date_parsed = event_date_parsed.replace(year=current_year + 1)
+            event_date_iso = event_date_parsed.date().isoformat()
+            _LOGGER.debug(f"Successfully parsed date '{event_date_with_year}' as '{event_date_iso}'")
+        except ValueError as ve:
+            _LOGGER.error(f"Error parsing date: {event_date_with_year} with error: {ve}")
             event_date_iso = "Unknown"
 
         # Extract location
         event_location_element = container.find('div', text=lambda x: x and 'Am Sportpark' in x)
         event_location = event_location_element.text.strip() if event_location_element else "Unknown"
 
-        _LOGGER.debug(f"Fetched information: {event_title} - {event_url} - {event_date} - {in_count} - {event_location}")
+        _LOGGER.debug(f"Fetched information: {event_title} - {event_url} - {event_date_iso} - {in_count} - {event_location}")
 
         event_type = None
         for possible_type in ["Training", "Spiel", "Sonstiges"]:
