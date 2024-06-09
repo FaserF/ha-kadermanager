@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt_util
 import voluptuous as vol
 from .const import CONF_TEAM_NAME, CONF_USERNAME, CONF_PASSWORD, ATTR_DATA, DOMAIN, CONF_UPDATE_INTERVAL
+from homeassistant.helpers.event import async_track_time_interval
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -111,8 +112,8 @@ class KadermanagerSensor(SensorEntity):
     async def async_added_to_hass(self):
         """When entity is added to hass."""
         self.async_on_remove(
-            self.hass.helpers.event.async_track_time_interval(
-                self.async_update, self.update_interval
+            async_track_time_interval(
+                self.hass, self.async_update, self.update_interval
             )
         )
 
@@ -237,8 +238,9 @@ def get_kadermanager_events(url, main_url):
             'title': event_title,
             'link': event_url,
             'location': event_location,
-            'type': event_type,
+            'type': event_type
         }
+
         events.append(event_info)
 
     return events
