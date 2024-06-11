@@ -9,6 +9,7 @@
           "username": "Username (Email) for Sign in",
           "password": "Password for Sign in",
           "event_limit": "Limit of events being fetched",
+          "fetch_player_info": "Fetch player informations like attendees, people who declined the event",
           "update_interval": "Update Interval (minutes)"
         }
       }
@@ -24,6 +25,7 @@
           "username": "Username (Email) for Sign in",
           "password": "Password for Sign in",
           "event_limit": "Limit of events being fetched",
+          "fetch_player_info": "Fetch player informations like attendees, people who declined the event",
           "update_interval": "Update Interval (minutes)"
         }
       }

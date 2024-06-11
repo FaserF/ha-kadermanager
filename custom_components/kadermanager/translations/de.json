@@ -9,6 +9,7 @@
           "username": "Benutzername (E-Mail) für die Anmeldung",
           "password": "Passwort für die Anmeldung",
           "event_limit": "Maximale Anzahl an Events die abgerufen werden",
+          "fetch_player_info": "Spielerdaten abrufen, wie z.B. Zusagen, Absagen?",
           "update_interval": "Aktualisierungsintervall (Minuten)"
         }
       }
@@ -24,6 +25,7 @@
           "username": "Benutzername (E-Mail) für die Anmeldung",
           "password": "Passwort für die Anmeldung",
           "event_limit": "Maximale Anzahl an Events die abgerufen werden",
+          "fetch_player_info": "Spielerdaten abrufen, wie z.B. Zusagen, Absagen?",
           "update_interval": "Aktualisierungsintervall (Minuten)"
         }
       }
