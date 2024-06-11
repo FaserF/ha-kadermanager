@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt_util
 import voluptuous as vol
 
-from .const import CONF_TEAM_NAME, CONF_USERNAME, CONF_PASSWORD, ATTR_DATA, DOMAIN, CONF_UPDATE_INTERVAL, CONF_EVENT_LIMIT
+from .const import CONF_TEAM_NAME, CONF_USERNAME, CONF_PASSWORD, ATTR_DATA, DOMAIN, CONF_UPDATE_INTERVAL, CONF_EVENT_LIMIT, CONF_FETCH_PLAYER_INFO
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,8 +44,9 @@ class KadermanagerSensor(SensorEntity):
         self.teamname = config[CONF_TEAM_NAME]
         self.username = config.get(CONF_USERNAME)
         self.password = config.get(CONF_PASSWORD)
-        self.update_interval = timedelta(minutes=config.get(CONF_UPDATE_INTERVAL, 30))
-        self.event_limit = config.get(CONF_EVENT_LIMIT, 3)
+        self.update_interval = timedelta(minutes=config.get(CONF_UPDATE_INTERVAL))
+        self.event_limit = config.get(CONF_EVENT_LIMIT)
+        self.fetch_player_info = config.get(CONF_FETCH_PLAYER_INFO)
         self._state = None
         self._available = True
         self.hass = hass
@@ -98,9 +99,12 @@ class KadermanagerSensor(SensorEntity):
                 if events:
                     limited_events = events[:self.event_limit]  # Limit to the configured number of events
                     for event in limited_events:
-                        event_url = event['link']
-                        players = await self.hass.async_add_executor_job(get_players_for_event, event_url)
-                        event['players'] = players if players else {'accepted_players': [], 'declined_players': [], 'no_response_players': []}
+                        if self.fetch_player_info:
+                            event_url = event['link']
+                            players = await self.hass.async_add_executor_job(get_players_for_event, event_url)
+                            event['players'] = players if players else {}
+                        else:
+                            event['players'] = {}
                     self._state = limited_events[0]['original_date']
                     self._attributes = {
                         'events': limited_events,

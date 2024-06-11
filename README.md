@@ -30,6 +30,7 @@ Go to Configuration -> Integrations and click on "add integration". Then search 
 - **team name**: input your kadermanager teamname (it usually is your kadermanager subdomain, f.e.: teamname.kadermanager.de)
 - **refresh time**: the refresh interval in minutes
 - **event limit**: the event limit count that should be fetched
+- **fetch player info**: try player info fetching (like event response) or not -> If the events are not public, you can disable this to lower the traffic
 
 **IMPORTANT: Currently it looks like sign in by "bots" are blocked from kadermanager, therefore login wont work (yet)**
 - **username** (optional - without less informations can be fetched): input your kadermanager username (usually an email)
@@ -48,15 +49,32 @@ Go to Configuration -> Integrations and click on "add integration". Then search 
 ### Attributes available with sign in / public events
 Currently signing in wont work, as bots seem to be blocked. But you can check your events to be public readable, then the following data can also be fetched: 
 
-- accepted_players: Players that accepted the event
-- declined_players: Players that declined the event
-- no_response_players: Players that gave no response if they are attending or not
+- accepted_players (will only be fetched if "fetch player info" is turned on): Players that accepted the event
+- declined_players (will only be fetched if "fetch player info" is turned on): Players that declined the event
+- no_response_players (will only be fetched if "fetch player info" is turned on): Players that gave no response if they are attending or not
 
 The data is being refreshed every 30 minutes per default, unless otherwise defined in the refresh time.
 
 ## Automation example
 ```yaml
-
+automation:
+  - alias: "Reminder for Kadermanager event two days before"
+    trigger:
+      - platform: template
+        value_template: "{{ as_timestamp(states.sensor.kadermanager_teamname.attributes.events[0].date) - as_timestamp(now()) <= 2 * 24 * 3600 }}"
+    condition:
+      - condition: template
+        value_template: "{{ states.sensor.kadermanager_teamname.attributes.events }}"
+    action:
+      - service: notify.notify
+        data_template:
+          title: "Upcoming kadermanager event"
+          message: >
+            The next Kadermanager event is coming:
+            Type: {{ states.sensor.kadermanager_teamname.attributes.events[0].type }}
+            Titel: {{ states.sensor.kadermanager_teamname.attributes.events[0].title }}
+            Accepted Count: {{ states.sensor.kadermanager_teamname.attributes.events[0].in_count }}
+            Who has declined: {{ states.sensor.kadermanager_teamname.attributes.events[0].players.declined_players | join(', ') }}
 ```
 
 ## Bug reporting

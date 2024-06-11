@@ -16,6 +16,7 @@ from .const import (
     CONF_UPDATE_INTERVAL,
     DOMAIN,
     CONF_EVENT_LIMIT,
+    CONF_FETCH_PLAYER_INFO,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,6 +48,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Optional(CONF_PASSWORD, default=__get_option(CONF_PASSWORD, "")): str,
                     vol.Required(CONF_UPDATE_INTERVAL, default=__get_option(CONF_UPDATE_INTERVAL, 30)): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
                     vol.Required(CONF_EVENT_LIMIT, default=__get_option(CONF_EVENT_LIMIT, 3)): vol.All(vol.Coerce(int), vol.Range(min=1, max=8)),
+                    vol.Required(CONF_FETCH_PLAYER_INFO, default=__get_option(CONF_FETCH_PLAYER_INFO, True)): bool,
                 },
             ),
         )
@@ -77,6 +79,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_PASSWORD): str,
                 vol.Required(CONF_UPDATE_INTERVAL, default=30): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
                 vol.Required(CONF_EVENT_LIMIT, default=3): vol.All(vol.Coerce(int), vol.Range(min=1, max=8)),
+                vol.Required(CONF_FETCH_PLAYER_INFO, default=True): bool,
             },
         )
 
