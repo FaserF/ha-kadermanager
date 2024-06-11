@@ -88,6 +88,7 @@ class KadermanagerSensor(SensorEntity):
                 # Check if username and password are provided
                 if self.username and self.password:
                     _LOGGER.warning("Skipping login, since bot logins are blocked from website")
+                    #login_and_fetch_data(self.username, self.password, login_url, URL)
                 else:
                     _LOGGER.debug("Username or password not provided, skipping login.")
 
@@ -96,6 +97,10 @@ class KadermanagerSensor(SensorEntity):
                 events = await self.hass.async_add_executor_job(get_kadermanager_events, URL, main_url)
                 if events:
                     limited_events = events[:self.event_limit]  # Limit to the configured number of events
+                    for event in limited_events:
+                        event_url = event['link']
+                        players = await self.hass.async_add_executor_job(get_players_for_event, event_url)
+                        event['players'] = players if players else {'accepted_players': [], 'declined_players': [], 'no_response_players': []}
                     self._state = limited_events[0]['original_date']
                     self._attributes = {
                         'events': limited_events,
@@ -120,6 +125,39 @@ class KadermanagerSensor(SensorEntity):
                 self.async_update, self.update_interval
             )
         )
+
+def get_players_for_event(event_url):
+    response = requests.get(event_url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    player_types = {
+        'accepted_players': [],
+        'declined_players': [],
+        'no_response_players': []
+    }
+
+    # Find all drop-zones
+    drop_zones = soup.find_all('div', class_='drop-zone')
+    for zone in drop_zones:
+        zone_id = zone.get('id')
+        # Check the zone ID to determine the player status
+        if zone_id == 'zone_1':  # Event accepted
+            player_labels = zone.find_all('span', class_='player_label')
+            for label in player_labels:
+                player_name = label.text.strip()
+                player_types['accepted_players'].append(player_name)
+        elif zone_id == 'zone_2':  # Event declined
+            player_labels = zone.find_all('span', class_='player_label')
+            for label in player_labels:
+                player_name = label.text.strip()
+                player_types['declined_players'].append(player_name)
+        elif zone_id == 'zone_3':  # No event response
+            player_labels = zone.find_all('span', class_='player_label')
+            for label in player_labels:
+                player_name = label.text.strip()
+                player_types['no_response_players'].append(player_name)
+
+    return player_types
 
 def get_kadermanager_events(url, main_url):
     response = requests.get(url)

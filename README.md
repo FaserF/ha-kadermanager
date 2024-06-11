@@ -28,6 +28,8 @@ Go to Configuration -> Integrations and click on "add integration". Then search 
 
 ### Configuration Variables
 - **team name**: input your kadermanager teamname (it usually is your kadermanager subdomain, f.e.: teamname.kadermanager.de)
+- **refresh time**: the refresh interval in minutes
+- **event limit**: the event limit count that should be fetched
 
 **IMPORTANT: Currently it looks like sign in by "bots" are blocked from kadermanager, therefore login wont work (yet)**
 - **username** (optional - without less informations can be fetched): input your kadermanager username (usually an email)
@@ -43,7 +45,19 @@ Go to Configuration -> Integrations and click on "add integration". Then search 
 - link: Link to the event
 - location: Location of the event
 
-more attributes could be done, when sign in is working. The data is being refreshed every 30 minutes.
+### Attributes available with sign in / public events
+Currently signing in wont work, as bots seem to be blocked. But you can check your events to be public readable, then the following data can also be fetched: 
+
+- accepted_players: Players that accepted the event
+- declined_players: Players that declined the event
+- no_response_players: Players that gave no response if they are attending or not
+
+The data is being refreshed every 30 minutes per default, unless otherwise defined in the refresh time.
+
+## Automation example
+```yaml
+
+```
 
 ## Bug reporting
 Open an issue over at [github issues](https://github.com/FaserF/ha-kadermanager/issues). Please prefer sending over a log with debugging enabled.
@@ -59,6 +73,6 @@ logger:
 You can then find the log in the HA settings -> System -> Logs -> Enter "kadermanager" in the search bar -> "Load full logs"
 
 ## Thanks to
-Thanks for Kadermanager for their great free software!
+Thanks to Kadermanager for their great free software!
 
 The data is coming from the [kadermanager.de](https://kadermanager.de/) website.
