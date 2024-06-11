@@ -150,7 +150,7 @@ def get_kadermanager_events(url, main_url):
         if idx < 2:
             if main_event_containers:
                 in_count_element = main_event_containers[idx]
-                in_count = in_count_element.text.strip() if         in_count_element else "Unknown"
+                in_count = in_count_element.text.strip() if in_count_element else "Unknown"
                 # Convert in_count to an integer if possible
                 try:
                     in_count = int(in_count)
@@ -195,6 +195,10 @@ def get_kadermanager_events(url, main_url):
         if "Morgen" in event_date_time:
             event_date = (datetime.now() + timedelta(days=1)).strftime("%d.%m.%Y")
 
+        # Handle "Heute" case
+        if "Heute" in event_date_time:
+            event_date = (datetime.now()).strftime("%d.%m.%Y")
+
         # Ensure the date has no additional periods
         if event_date.endswith('.'):
             event_date = event_date[:-1]
@@ -221,7 +225,17 @@ def get_kadermanager_events(url, main_url):
             event_date_iso = "Unknown"
 
         # Extract location
-        event_location_element = container.find('div', text=lambda x: x and 'Am Sportpark' in x)
+        event_location_element = container.find('div', class_='location')
+        if not event_location_element:
+            event_location_element = container.find('div', text=lambda x: x and ('Ort:' in x or 'Location:' in x))
+            if not event_location_element:
+                # Fallback to direct sibling div
+                event_location_element = event_date_element.find_next_sibling('div')
+
+                # Check if the found element is a comment, if so, set location to "Unknown"
+                if event_location_element and 'event-latest-comment' in event_location_element.get('class', []):
+                    event_location_element = None
+
         event_location = event_location_element.text.strip() if event_location_element else "Unknown"
 
         _LOGGER.debug(f"Fetched information: {event_title} - {event_url} - {event_date} - {in_count} - {event_location}")
