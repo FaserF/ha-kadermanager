@@ -8,6 +8,7 @@
           "team_name": "Team Name",
           "username": "Benutzername (E-Mail) für die Anmeldung",
           "password": "Passwort für die Anmeldung",
+          "event_limit": "Maximale Anzahl an Events die abgerufen werden",
           "update_interval": "Aktualisierungsintervall (Minuten)"
         }
       }
@@ -22,6 +23,7 @@
           "team_name": "Team Name",
           "username": "Benutzername (E-Mail) für die Anmeldung",
           "password": "Passwort für die Anmeldung",
+          "event_limit": "Maximale Anzahl an Events die abgerufen werden",
           "update_interval": "Aktualisierungsintervall (Minuten)"
         }
       }

@@ -8,6 +8,7 @@
           "team_name": "Team Name",
           "username": "Username (Email) for Sign in",
           "password": "Password for Sign in",
+          "event_limit": "Limit of events being fetched",
           "update_interval": "Update Interval (minutes)"
         }
       }
@@ -22,6 +23,7 @@
           "team_name": "Team Name",
           "username": "Username (Email) for Sign in",
           "password": "Password for Sign in",
+          "event_limit": "Limit of events being fetched",
           "update_interval": "Update Interval (minutes)"
         }
       }

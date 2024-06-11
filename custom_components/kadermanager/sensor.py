@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt_util
 import voluptuous as vol
 
-from .const import CONF_TEAM_NAME, CONF_USERNAME, CONF_PASSWORD, ATTR_DATA, DOMAIN, CONF_UPDATE_INTERVAL
+from .const import CONF_TEAM_NAME, CONF_USERNAME, CONF_PASSWORD, ATTR_DATA, DOMAIN, CONF_UPDATE_INTERVAL, CONF_EVENT_LIMIT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ class KadermanagerSensor(SensorEntity):
         self.username = config.get(CONF_USERNAME)
         self.password = config.get(CONF_PASSWORD)
         self.update_interval = timedelta(minutes=config.get(CONF_UPDATE_INTERVAL, 30))
+        self.event_limit = config.get(CONF_EVENT_LIMIT, 3)
         self._state = None
         self._available = True
         self.hass = hass
@@ -94,7 +95,7 @@ class KadermanagerSensor(SensorEntity):
                 _LOGGER.debug(f"Update the connection data for '{self.teamname}'")
                 events = await self.hass.async_add_executor_job(get_kadermanager_events, URL, main_url)
                 if events:
-                    limited_events = events[:5]  # Limit to the next 5 events
+                    limited_events = events[:self.event_limit]  # Limit to the configured number of events
                     self._state = limited_events[0]['original_date']
                     self._attributes = {
                         'events': limited_events,
@@ -149,7 +150,7 @@ def get_kadermanager_events(url, main_url):
         if idx < 2:
             if main_event_containers:
                 in_count_element = main_event_containers[idx]
-                in_count = in_count_element.text.strip() if in_count_element else "Unknown"
+                in_count = in_count_element.text.strip() if         in_count_element else "Unknown"
                 # Convert in_count to an integer if possible
                 try:
                     in_count = int(in_count)
