@@ -64,6 +64,8 @@ comments:
 The data is being refreshed every 30 minutes per default, unless otherwise defined in the refresh time.
 
 ## Automation example
+Send a reminder for the next event two days before
+
 ```yaml
 automation:
   - alias: "Reminder for Kadermanager event two days before"
@@ -83,6 +85,29 @@ automation:
             Titel: {{ states.sensor.kadermanager_teamname.attributes.events[0].title }}
             Accepted Count: {{ states.sensor.kadermanager_teamname.attributes.events[0].in_count }}
             Who has declined: {{ states.sensor.kadermanager_teamname.attributes.events[0].players.declined_players | join(', ') }}
+```
+
+Send a message if a new kadermanager event has been written
+```yaml
+automation:
+  - alias: "Notification on New Comment"
+    trigger:
+      - platform: state
+        entity_id: sensor.kadermanager_teamname
+    condition:
+      # Check if the comment has changed
+      condition: template
+      value_template: >
+        {{ trigger.from_state.attributes.extra_state_attributes.events[0].comments != trigger.to_state.attributes.extra_state_attributes.events[0].comments }}
+    action:
+      - service: notify.notify
+        data:
+          message: >
+            New comment by {{ trigger.to_state.attributes.extra_state_attributes.events[0].comments[0].author }}:
+            {{ trigger.to_state.attributes.extra_state_attributes.events[0].comments[0].text }}
+            # More unefficent alternative: 
+            # New comment by {{ states.sensor.kadermanager_teamname.attributes.events[0].comments[0].author }}: 
+            # {{ states.sensor.kadermanager_teamname.attributes.events[0].comments[0].text }}
 ```
 
 ## Bug reporting
