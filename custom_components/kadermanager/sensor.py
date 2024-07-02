@@ -103,8 +103,11 @@ class KadermanagerSensor(SensorEntity):
                             event_url = event['link']
                             players = await self.hass.async_add_executor_job(get_players_for_event, event_url)
                             event['players'] = players if players else {}
+                            comments = await self.hass.async_add_executor_job(get_comments_for_event, event_url)
+                            event['comments'] = comments if comments else []
                         else:
                             event['players'] = {}
+                            event['comments'] = []
                     self._state = limited_events[0]['original_date']
                     self._attributes = {
                         'events': limited_events,
@@ -162,6 +165,30 @@ def get_players_for_event(event_url):
                 player_types['no_response_players'].append(player_name)
 
     return player_types
+
+def get_comments_for_event(event_url):
+    _LOGGER.debug(f"Fetching comments for event: {event_url}")
+    response = requests.get(event_url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    comments = []
+    comment_divs = soup.find_all('div', class_='message')
+
+    # Limit the number of comments to 4
+    for idx, comment_div in enumerate(comment_divs):
+        if idx >= 4:
+            break
+        author_element = comment_div.find('h5')
+        text_element = comment_div.find('p')
+        if author_element and text_element:
+            author = author_element.text.strip()
+            text = text_element.text.strip()
+            comments.append({'author': author, 'text': text})
+        else:
+            _LOGGER.debug(f"Skipping a comment due to missing author or text: {comment_div}")
+
+    _LOGGER.debug(f"Fetched comments: {comments}")
+    return comments
 
 def get_kadermanager_events(url, main_url):
     response = requests.get(url)
