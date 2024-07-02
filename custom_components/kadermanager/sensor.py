@@ -16,7 +16,17 @@ from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt_util
 import voluptuous as vol
 
-from .const import CONF_TEAM_NAME, CONF_USERNAME, CONF_PASSWORD, ATTR_DATA, DOMAIN, CONF_UPDATE_INTERVAL, CONF_EVENT_LIMIT, CONF_FETCH_PLAYER_INFO
+from .const import (
+    CONF_TEAM_NAME,
+    CONF_USERNAME,
+    CONF_PASSWORD,
+    ATTR_DATA,
+    DOMAIN,
+    CONF_UPDATE_INTERVAL,
+    CONF_EVENT_LIMIT,
+    CONF_FETCH_PLAYER_INFO,
+    CONF_FETCH_COMMENTS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,6 +57,7 @@ class KadermanagerSensor(SensorEntity):
         self.update_interval = timedelta(minutes=config.get(CONF_UPDATE_INTERVAL))
         self.event_limit = config.get(CONF_EVENT_LIMIT)
         self.fetch_player_info = config.get(CONF_FETCH_PLAYER_INFO)
+        self.fetch_comments = config.get(CONF_FETCH_COMMENTS)
         self._state = None
         self._available = True
         self.hass = hass
@@ -86,6 +97,7 @@ class KadermanagerSensor(SensorEntity):
                 URL = f"https://{self.teamname}.kadermanager.de/events"
                 main_url = f"https://{self.teamname}.kadermanager.de"
                 login_url = f"https://{self.teamname}.kadermanager.de/sessions/new"
+
                 # Check if username and password are provided
                 if self.username and self.password:
                     _LOGGER.warning("Skipping login, since bot logins are blocked from website")
@@ -103,8 +115,11 @@ class KadermanagerSensor(SensorEntity):
                             event_url = event['link']
                             players = await self.hass.async_add_executor_job(get_players_for_event, event_url)
                             event['players'] = players if players else {}
-                            comments = await self.hass.async_add_executor_job(get_comments_for_event, event_url)
-                            event['comments'] = comments if comments else []
+                            if self.fetch_comments:
+                                comments = await self.hass.async_add_executor_job(get_comments_for_event, event_url)
+                                event['comments'] = comments if comments else []
+                            #else:
+                            #    event['comments'] = []
                         else:
                             event['players'] = {}
                             event['comments'] = []

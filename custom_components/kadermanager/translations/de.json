@@ -10,6 +10,7 @@
           "password": "Passwort für die Anmeldung",
           "event_limit": "Maximale Anzahl an Events die abgerufen werden",
           "fetch_player_info": "Spielerdaten abrufen, wie z.B. Zusagen, Absagen?",
+          "fetch_comments": "Kommentare zu Ereignissen abrufen?",
           "update_interval": "Aktualisierungsintervall (Minuten)"
         }
       }
@@ -26,6 +27,7 @@
           "password": "Passwort für die Anmeldung",
           "event_limit": "Maximale Anzahl an Events die abgerufen werden",
           "fetch_player_info": "Spielerdaten abrufen, wie z.B. Zusagen, Absagen?",
+          "fetch_comments": "Kommentare zu Ereignissen abrufen?",
           "update_interval": "Aktualisierungsintervall (Minuten)"
         }
       }

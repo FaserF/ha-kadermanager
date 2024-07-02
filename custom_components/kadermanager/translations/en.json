@@ -10,6 +10,7 @@
           "password": "Password for Sign in",
           "event_limit": "Limit of events being fetched",
           "fetch_player_info": "Fetch player informations like attendees, people who declined the event",
+          "fetch_comments": "Fetch comments for events",
           "update_interval": "Update Interval (minutes)"
         }
       }
@@ -26,6 +27,7 @@
           "password": "Password for Sign in",
           "event_limit": "Limit of events being fetched",
           "fetch_player_info": "Fetch player informations like attendees, people who declined the event",
+          "fetch_comments": "Fetch comments for events",
           "update_interval": "Update Interval (minutes)"
         }
       }
