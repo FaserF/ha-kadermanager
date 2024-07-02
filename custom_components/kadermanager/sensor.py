@@ -189,10 +189,11 @@ def get_comments_for_event(event_url):
     comments = []
     comment_divs = soup.find_all('div', class_='message')
 
-    # Limit the number of comments to 4
-    for idx, comment_div in enumerate(comment_divs):
-        if idx >= 4:
-            break
+    # Reverse the order of comments
+    reversed_comments = comment_divs[::-1]
+
+    # Limit the number of comments to the latest 4, since the newest comment is the last comment
+    for idx, comment_div in enumerate(reversed_comments[:4]):
         author_element = comment_div.find('h5')
         text_element = comment_div.find('p')
         if author_element and text_element:
