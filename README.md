@@ -98,16 +98,15 @@ automation:
       # Check if the comment has changed
       condition: template
       value_template: >
-        {{ trigger.from_state.attributes.extra_state_attributes.events[0].comments != trigger.to_state.attributes.extra_state_attributes.events[0].comments }}
+        {% set old_comments = trigger.from_state.attributes.events[0].comments if trigger.from_state.attributes.events else [] %}
+        {% set new_comments = trigger.to_state.attributes.events[0].comments if trigger.to_state.attributes.events else [] %}
+        {{ new_comments | length > old_comments | length }}
     action:
       - service: notify.notify
         data:
           message: >
-            New comment by {{ trigger.to_state.attributes.extra_state_attributes.events[0].comments[0].author }}:
-            {{ trigger.to_state.attributes.extra_state_attributes.events[0].comments[0].text }}
-            # More unefficent alternative: 
-            # New comment by {{ states.sensor.kadermanager_teamname.attributes.events[0].comments[0].author }}: 
-            # {{ states.sensor.kadermanager_teamname.attributes.events[0].comments[0].text }}
+            New comment by {{ states.sensor.kadermanager_teamname.attributes.events[0].comments[0].author }}: 
+            {{ states.sensor.kadermanager_teamname.attributes.events[0].comments[0].text }}
 ```
 
 ## Bug reporting
