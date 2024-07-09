@@ -189,10 +189,10 @@ def get_comments_for_event(event_url):
     comments = []
     comment_divs = soup.find_all('div', class_='message')
 
-    # Reverse the order of comments
+    # Reverse the order of comments, since the newest comment is the last comment
     reversed_comments = comment_divs[::-1]
 
-    # Limit the number of comments to the latest 4, since the newest comment is the last comment
+    # Limit the number of comments to the latest 4
     for idx, comment_div in enumerate(reversed_comments[:4]):
         author_element = comment_div.find('h5')
         text_element = comment_div.find('p')
@@ -288,9 +288,9 @@ def get_kadermanager_events(url, main_url):
         if event_date.endswith('.'):
             event_date = event_date[:-1]
 
-        # Add the current year to the event date if not already present
+        # Check if the date already contains a year (last 4 characters should be digits)
         current_year = datetime.now().year
-        if not event_date.endswith(str(current_year)):
+        if not event_date[-4:].isdigit():
             event_date += f".{current_year}"
 
         # Parse the date using multiple formats
