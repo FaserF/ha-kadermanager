@@ -118,8 +118,6 @@ class KadermanagerSensor(SensorEntity):
                             if self.fetch_comments:
                                 comments = await self.hass.async_add_executor_job(get_comments_for_event, event_url)
                                 event['comments'] = comments if comments else []
-                            #else:
-                            #    event['comments'] = []
                         else:
                             event['players'] = {}
                             event['comments'] = []
@@ -199,6 +197,9 @@ def get_comments_for_event(event_url):
         if author_element and text_element:
             author = author_element.text.strip()
             text = text_element.text.strip()
+            # Remove specific text if present
+            if "hat sich angemeldet\nin:" in text:
+                text = text.replace("hat sich angemeldet\nin:", "").strip()
             comments.append({'author': author, 'text': text})
         else:
             _LOGGER.debug(f"Skipping a comment due to missing author or text: {comment_div}")
