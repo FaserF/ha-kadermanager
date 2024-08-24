@@ -3,9 +3,7 @@ import logging
 from typing import Any, Dict, Optional
 import requests
 from bs4 import BeautifulSoup
-
 import async_timeout
-
 from homeassistant import config_entries, core
 from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
 from homeassistant.const import ATTR_ATTRIBUTION
@@ -14,6 +12,7 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.core import HomeAssistant
 import homeassistant.util.dt as dt_util
+from homeassistant.helpers.event import async_track_time_interval
 import voluptuous as vol
 
 from .const import (
@@ -101,7 +100,7 @@ class KadermanagerSensor(SensorEntity):
                 # Check if username and password are provided
                 if self.username and self.password:
                     _LOGGER.warning("Skipping login, since bot logins are blocked from website")
-                    #login_and_fetch_data(self.username, self.password, login_url, URL)
+                    # login_and_fetch_data(self.username, self.password, login_url, URL)
                 else:
                     _LOGGER.debug("Username or password not provided, skipping login.")
 
@@ -141,8 +140,10 @@ class KadermanagerSensor(SensorEntity):
     async def async_added_to_hass(self):
         """When entity is added to hass."""
         self.async_on_remove(
-            self.hass.helpers.event.async_track_time_interval(
-                self.async_update, self.update_interval
+            async_track_time_interval(
+                self.hass,
+                self.async_update,
+                self.update_interval
             )
         )
 
