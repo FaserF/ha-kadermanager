@@ -198,9 +198,11 @@ def get_comments_for_event(event_url):
         if author_element and text_element:
             author = author_element.text.strip()
             text = text_element.text.strip()
-            # Remove specific text if present
-            if "hat sich angemeldet\nin:" in text:
-                text = text.replace("hat sich angemeldet\nin:", "").strip()
+
+            # Keep only the part before the first newline character
+            if '\n' in author:
+                author = author.split('\n', 1)[0].strip()
+
             comments.append({'author': author, 'text': text})
         else:
             _LOGGER.debug(f"Skipping a comment due to missing author or text: {comment_div}")
