@@ -38,30 +38,41 @@ Go to Configuration -> Integrations and click on "add integration". Then search 
 - **password** (optional - without less informations can be fetched): input your kadermanager password
 
 ## Sensor Attributes
-- original_date: Displays the Date and Time for the event
-- date: extracted date from original_date
-- time: extraced time from original_date
-- in_count: Current count of people in for the event
-- title: Event title (will be filled with the type if empty)
-- type: Event type (training/game/other)
-- link: Link to the event
-- location: Location of the event
+The data is being refreshed every 30 minutes per default, unless otherwise defined in the refresh time.
+
+### General attributes
+- events: 
+  - original_date: Displays the Date and Time for the event
+  - comments: Displays event specific comments
+    - text
+    - author
+  - date: extracted date from original_date
+  - time: extraced time from original_date
+  - in_count: Current count of people in for the event
+  - title: Event title (will be filled with the type if empty)
+  - type: Event type (training/game/other)
+  - link: Link to the event
+  - location: Location of the event
 
 ### Attributes available with sign in / public events
 Those data will only be fetched for the next upcoming event.
 
 Currently signing in wont work, as bots seem to be blocked. But you can check your events to be public readable, then the following data can also be fetched: 
 
-players: 
-- accepted_players (will only be fetched if "fetch player info" is turned on): Players that accepted the event
-- declined_players (will only be fetched if "fetch player info" is turned on): Players that declined the event
-- no_response_players (will only be fetched if "fetch player info" is turned on): Players that gave no response if they are attending or not
+- events: 
+  - players: 
+    - accepted_players (will only be fetched if "fetch player info" is turned on): Players that accepted the event
+    - declined_players (will only be fetched if "fetch player info" is turned on): Players that declined the event
+    - no_response_players (will only be fetched if "fetch player info" is turned on): Players that gave no response if they are attending or not
 
-comments: 
-- author: player that has written the comment
-- text: Text written in the comment
+- events: 
+  - comments: 
+    - author: player that has written the comment
+    - text: Text written in the comment
 
-The data is being refreshed every 30 minutes per default, unless otherwise defined in the refresh time.
+### Attributes available with sign in (doesnt matter if events are public)
+Currently signing in wont work, as bots seem to be blocked.
+- comments: Displays all general comments from the main page, which are not event related
 
 ## Automation example
 Send a reminder for the next event two days before
