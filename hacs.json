@@ -1,7 +1,5 @@
 {
     "name": "Kadermanager",
     "render_readme": true,
-    "country": [
-        "DE"
-    ]
+    "country": ["DE"]
 }

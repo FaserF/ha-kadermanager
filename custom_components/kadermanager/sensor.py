@@ -99,8 +99,8 @@ class KadermanagerSensor(SensorEntity):
 
                 # Check if username and password are provided
                 if self.username and self.password:
-                    _LOGGER.warning("Skipping login, since bot logins are blocked from website")
-                    # login_and_fetch_data(self.username, self.password, login_url, URL)
+                    # _LOGGER.warning("Skipping login, since bot logins are blocked from website")
+                    _LOGGER.debug("Skipping login, since bot logins are blocked from website")
                 else:
                     _LOGGER.debug("Username or password not provided, skipping login.")
 
@@ -120,11 +120,16 @@ class KadermanagerSensor(SensorEntity):
                         else:
                             event['players'] = {}
                             event['comments'] = []
+                    
+                    if self.fetch_comments:
+                        general_comments = await self.hass.async_add_executor_job(get_general_comments, main_url)
+                        self._attributes['comments'] = general_comments
+
                     self._state = limited_events[0]['original_date']
-                    self._attributes = {
+                    self._attributes.update({
                         'events': limited_events,
                         'last_updated': datetime.now().isoformat()
-                    }
+                    })
                 else:
                     self._state = "No events found"
                     self._attributes = {}
@@ -198,14 +203,54 @@ def get_comments_for_event(event_url):
         if author_element and text_element:
             author = author_element.text.strip()
             text = text_element.text.strip()
-            # Remove specific text if present
-            if "hat sich angemeldet\nin:" in text:
-                text = text.replace("hat sich angemeldet\nin:", "").strip()
+
+            # Keep only the part before the first newline character
+            if '\n' in author:
+                author = author.split('\n', 1)[0].strip()
+
             comments.append({'author': author, 'text': text})
         else:
             _LOGGER.debug(f"Skipping a comment due to missing author or text: {comment_div}")
 
     _LOGGER.debug(f"Fetched comments: {comments}")
+    return comments
+
+def get_general_comments(main_url):
+    _LOGGER.debug(f"Fetching general comments from: {main_url}")
+    try:
+        response = requests.get(main_url)
+        response.raise_for_status()  # Ensure we notice bad responses
+    except requests.RequestException as e:
+        _LOGGER.error(f"Error fetching comments: {e}")
+        return []
+
+    soup = BeautifulSoup(response.text, 'html.parser')
+
+    comments = []
+    
+    # Find all the message containers
+    comment_divs = soup.find_all('div', class_='row message')
+
+    # Reverse the order of comments, since the newest comment is the last comment
+    reversed_comments = comment_divs[::-1]
+
+    # Limit the number of comments to the latest 4
+    for idx, comment_div in enumerate(reversed_comments[:4]):
+        author_element = comment_div.find('h5')
+        text_element = comment_div.find('p')
+        if author_element and text_element:
+            author = author_element.text.strip()
+            text = text_element.text.strip()
+
+            # Keep only the part before the first newline character
+            if '\n' in author:
+                author = author.split('\n', 1)[0].strip()
+
+            comments.append({'author': author, 'text': text})
+        else:
+            _LOGGER.debug(f"Skipping a comment due to missing author or text: {comment_div}")
+
+    _LOGGER.debug(f"Fetched general comments: {comments}")
     return comments
 
 def get_kadermanager_events(url, main_url):
