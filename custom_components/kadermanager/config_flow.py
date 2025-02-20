@@ -1,4 +1,3 @@
-"""Config flow"""
 import logging
 from typing import Any
 
@@ -17,7 +16,7 @@ from .const import (
     DOMAIN,
     CONF_EVENT_LIMIT,
     CONF_FETCH_PLAYER_INFO,
-    CONF_FETCH_COMMENTS,  # Neue Konstante für Kommentarabruf
+    CONF_FETCH_COMMENTS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,7 +24,7 @@ _LOGGER = logging.getLogger(__name__)
 class OptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        super().__init__(config_entry)
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -38,7 +37,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             )
 
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
+            await self.async_set_unique_id(user_input[CONF_TEAM_NAME])
+            self._abort_if_unique_id_configured()
+            _LOGGER.debug("Initialized new kadermanager with id: %s", user_input[CONF_TEAM_NAME])
+            return self.async_create_entry(title=user_input[CONF_TEAM_NAME], data=user_input)
 
         return self.async_show_form(
             step_id="init",
@@ -50,7 +52,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required(CONF_UPDATE_INTERVAL, default=__get_option(CONF_UPDATE_INTERVAL, 30)): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
                     vol.Required(CONF_EVENT_LIMIT, default=__get_option(CONF_EVENT_LIMIT, 3)): vol.All(vol.Coerce(int), vol.Range(min=1, max=8)),
                     vol.Required(CONF_FETCH_PLAYER_INFO, default=__get_option(CONF_FETCH_PLAYER_INFO, True)): bool,
-                    vol.Required(CONF_FETCH_COMMENTS, default=__get_option(CONF_FETCH_COMMENTS, True)): bool,  # Option für Kommentarabruf hinzugefügt
+                    vol.Required(CONF_FETCH_COMMENTS, default=__get_option(CONF_FETCH_COMMENTS, True)): bool,
                 },
             ),
         )
@@ -68,11 +70,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             await self.async_set_unique_id(user_input[CONF_TEAM_NAME])
             self._abort_if_unique_id_configured()
-            return self.async_create_entry(title=user_input[CONF_TEAM_NAME], data=user_input)
 
-            _LOGGER.debug(
-                "Initialized new kadermanager with id: {unique_id}"
-            )
+            _LOGGER.debug("Initialized new kadermanager with id: %s", user_input[CONF_TEAM_NAME])
+
+            return self.async_create_entry(title=user_input[CONF_TEAM_NAME], data=user_input)
 
         data_schema = vol.Schema(
             {
@@ -82,7 +83,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_UPDATE_INTERVAL, default=30): vol.All(vol.Coerce(int), vol.Range(min=1, max=1440)),
                 vol.Required(CONF_EVENT_LIMIT, default=3): vol.All(vol.Coerce(int), vol.Range(min=1, max=8)),
                 vol.Required(CONF_FETCH_PLAYER_INFO, default=True): bool,
-                vol.Required(CONF_FETCH_COMMENTS, default=True): bool,  # Standardmäßig Kommentare abrufen
+                vol.Required(CONF_FETCH_COMMENTS, default=True): bool,
             },
         )
 
