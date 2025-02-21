@@ -8,7 +8,13 @@ The `kadermanager` sensor will give informations about events and participants
 ## Installation
 ### 1. Using HACS (recommended way)
 
-Not available in HACS yet, but it is planned.
+This integration is NO official HACS Integration right now.
+
+Open HACS then install the "kadermanager" integration or use the link below.
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=FaserF&repository=ha-kadermanager&category=integration)
+
+If you use this method, your component will always update to the latest version.
 
 ### 2. Manual
 
@@ -41,7 +47,7 @@ Go to Configuration -> Integrations and click on "add integration". Then search 
 The data is being refreshed every 30 minutes per default, unless otherwise defined in the refresh time.
 
 ### General attributes
-- events: 
+- events:
   - original_date: Displays the Date and Time for the event
   - comments: Displays event specific comments
     - text
@@ -57,16 +63,16 @@ The data is being refreshed every 30 minutes per default, unless otherwise defin
 ### Attributes available with sign in / public events
 Those data will only be fetched for the next upcoming event.
 
-Currently signing in wont work, as bots seem to be blocked. But you can check your events to be public readable, then the following data can also be fetched: 
+Currently signing in wont work, as bots seem to be blocked. But you can check your events to be public readable, then the following data can also be fetched:
 
-- events: 
-  - players: 
+- events:
+  - players:
     - accepted_players (will only be fetched if "fetch player info" is turned on): Players that accepted the event
     - declined_players (will only be fetched if "fetch player info" is turned on): Players that declined the event
     - no_response_players (will only be fetched if "fetch player info" is turned on): Players that gave no response if they are attending or not
 
-- events: 
-  - comments: 
+- events:
+  - comments:
     - author: player that has written the comment
     - text: Text written in the comment
 
@@ -116,7 +122,7 @@ automation:
       - service: notify.notify
         data:
           message: >
-            New comment by {{ states.sensor.kadermanager_teamname.attributes.events[0].comments[0].author }}: 
+            New comment by {{ states.sensor.kadermanager_teamname.attributes.events[0].comments[0].author }}:
             {{ states.sensor.kadermanager_teamname.attributes.events[0].comments[0].text }}
 ```
 
