@@ -91,6 +91,7 @@ class KadermanagerSensor(SensorEntity):
         return self._attributes
 
     async def async_update(self):
+        """Get the latest data."""
         try:
             with async_timeout.timeout(30):
                 URL = f"https://{self.teamname}.kadermanager.de/events"
@@ -120,7 +121,7 @@ class KadermanagerSensor(SensorEntity):
                         else:
                             event['players'] = {}
                             event['comments'] = []
-                    
+
                     if self.fetch_comments:
                         general_comments = await self.hass.async_add_executor_job(get_general_comments, main_url)
                         self._attributes['comments'] = general_comments
@@ -227,7 +228,7 @@ def get_general_comments(main_url):
     soup = BeautifulSoup(response.text, 'html.parser')
 
     comments = []
-    
+
     # Find all the message containers
     comment_divs = soup.find_all('div', class_='row message')
 
