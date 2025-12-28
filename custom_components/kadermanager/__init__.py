@@ -4,7 +4,6 @@ import logging
 from datetime import timedelta
 
 from homeassistant import config_entries, core
-
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
     DataUpdateCoordinator,

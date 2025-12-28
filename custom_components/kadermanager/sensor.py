@@ -1,30 +1,31 @@
-from datetime import timedelta, datetime
 import logging
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
-import requests
-from bs4 import BeautifulSoup
+
 import async_timeout
+import homeassistant.helpers.config_validation as cv
+import homeassistant.util.dt as dt_util
+import requests
+import voluptuous as vol
+from bs4 import BeautifulSoup
 from homeassistant import config_entries, core
 from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity
 from homeassistant.const import ATTR_ATTRIBUTION
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-import homeassistant.helpers.config_validation as cv
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.core import HomeAssistant
-import homeassistant.util.dt as dt_util
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_interval
-import voluptuous as vol
+from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from .const import (
-    CONF_TEAM_NAME,
-    CONF_USERNAME,
-    CONF_PASSWORD,
     ATTR_DATA,
-    DOMAIN,
-    CONF_UPDATE_INTERVAL,
     CONF_EVENT_LIMIT,
-    CONF_FETCH_PLAYER_INFO,
     CONF_FETCH_COMMENTS,
+    CONF_FETCH_PLAYER_INFO,
+    CONF_PASSWORD,
+    CONF_TEAM_NAME,
+    CONF_UPDATE_INTERVAL,
+    CONF_USERNAME,
+    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)

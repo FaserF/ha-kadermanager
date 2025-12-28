@@ -1,22 +1,21 @@
 import logging
 from typing import Any
 
+import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
-import homeassistant.helpers.config_validation as cv
 
 from .const import (
-    CONF_TEAM_NAME,
-    CONF_USERNAME,
-    CONF_PASSWORD,
-    CONF_UPDATE_INTERVAL,
-    DOMAIN,
     CONF_EVENT_LIMIT,
-    CONF_FETCH_PLAYER_INFO,
     CONF_FETCH_COMMENTS,
+    CONF_FETCH_PLAYER_INFO,
+    CONF_PASSWORD,
+    CONF_TEAM_NAME,
+    CONF_UPDATE_INTERVAL,
+    CONF_USERNAME,
+    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
