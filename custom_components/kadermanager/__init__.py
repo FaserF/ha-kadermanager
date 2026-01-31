@@ -11,9 +11,7 @@ async def async_setup_entry(hass: core.HomeAssistant, entry: config_entries.Conf
     """Set up platform from a ConfigEntry."""
     hass.data.setdefault(DOMAIN, {})
 
-    config = entry.data
-    if entry.options:
-        config.update(entry.options)
+    config = {**entry.data, **entry.options}
 
     coordinator = KadermanagerDataUpdateCoordinator(hass, config)
 
