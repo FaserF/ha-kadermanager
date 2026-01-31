@@ -1,6 +1,6 @@
 import logging
 import requests
-import async_timeout
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from bs4 import BeautifulSoup
@@ -53,7 +53,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Fetch data from API endpoint."""
         try:
-            async with async_timeout.timeout(45):
+            async with asyncio.timeout(45):
                 return await self.hass.async_add_executor_job(self._scrape_data)
         except Exception as err:
             # Handle repair logic
