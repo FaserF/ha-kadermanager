@@ -10,3 +10,5 @@ CONF_UPDATE_INTERVAL = "update_interval"
 CONF_FETCH_PLAYER_INFO = "fetch_player_info"
 CONF_FETCH_COMMENTS = "fetch_comments"
 ATTR_DATA = "data"
+
+PLATFORMS = ["sensor", "calendar"]
