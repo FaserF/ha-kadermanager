@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, CONF_TEAM_NAME
 from .coordinator import KadermanagerDataUpdateCoordinator
@@ -61,8 +62,6 @@ class KadermanagerCalendar(CoordinatorEntity, CalendarEntity):
     @property
     def event(self) -> Optional[CalendarEvent]:
         """Return the next upcoming event."""
-        # This property is legacy/for state display, usually the next upcoming event.
-        # We can implement it by grabbing the first event from coordinator that is in the future.
         if not self.coordinator.data or not self.coordinator.data.get("events"):
             return None
 
@@ -82,8 +81,6 @@ class KadermanagerCalendar(CoordinatorEntity, CalendarEntity):
             cal_event = self._parse_event(event_data)
             if cal_event and convert_to_datetime(cal_event.start) >= start_date and convert_to_datetime(cal_event.end) <= end_date:
                 events.append(cal_event)
-            # Also include if it overlaps? Usually strict range check is fine or overlap check.
-            # Simple check: start < end_range AND end > start_range
             elif cal_event:
                  s = convert_to_datetime(cal_event.start)
                  e = convert_to_datetime(cal_event.end)
@@ -101,15 +98,13 @@ class KadermanagerCalendar(CoordinatorEntity, CalendarEntity):
             if not date_str or date_str == "Unknown":
                 return None
 
-            # Helper to combine
             if time_str and time_str != "Unknown":
-                 dt_start = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
-                 # Assume 2 hours duration by default
+                 dt_start_naive = datetime.strptime(f"{date_str} {time_str}", "%Y-%m-%d %H:%M")
+                 # Make aware assuming default time zone (Since scraped data is local)
+                 dt_start = dt_start_naive.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
+
                  dt_end = dt_start + timedelta(hours=2)
             else:
-                 # All day event if time is unknown? Or default to 00:00?
-                 # CalendarEntity supports date-only (all day).
-                 # If time is missing, let's make it all day.
                  dt_start = datetime.strptime(date_str, "%Y-%m-%d").date()
                  dt_end = dt_start + timedelta(days=1)
 
@@ -134,5 +129,7 @@ class KadermanagerCalendar(CoordinatorEntity, CalendarEntity):
 def convert_to_datetime(val):
     """Helper to ensure comparison works for date and datetime."""
     if isinstance(val, datetime):
+        if val.tzinfo is None:
+             val = val.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
         return val
-    return datetime(val.year, val.month, val.day)
+    return datetime(val.year, val.month, val.day, tzinfo=dt_util.DEFAULT_TIME_ZONE)

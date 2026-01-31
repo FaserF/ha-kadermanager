@@ -1,5 +1,6 @@
 import sys
 from unittest.mock import MagicMock
+import datetime
 
 # Create a mock for the base homeassistant package
 ha_mock = MagicMock()
@@ -22,7 +23,7 @@ class MockCoordinatorEntity:
         self.coordinator = coordinator
         self.last_update_success = True
 
-# Define a proper dummy class for DateUpdateCoordinator
+# Define a proper dummy class for DataUpdateCoordinator
 class MockDataUpdateCoordinator:
     def __init__(self, hass, logger, name, update_interval):
         self.data = {}
@@ -32,8 +33,16 @@ update_coordinator_mock.DataUpdateCoordinator = MockDataUpdateCoordinator
 update_coordinator_mock.UpdateFailed = Exception
 
 # Other mocks
-sys.modules["homeassistant.util"] = MagicMock()
-sys.modules["homeassistant.util.dt"] = MagicMock()
+util_mock = MagicMock()
+sys.modules["homeassistant.util"] = util_mock
+
+dt_mock = MagicMock()
+sys.modules["homeassistant.util.dt"] = dt_mock
+# Link them
+util_mock.dt = dt_mock
+# Mock DEFAULT_TIME_ZONE
+dt_mock.DEFAULT_TIME_ZONE = datetime.timezone.utc
+
 sys.modules["homeassistant.config_entries"] = MagicMock()
 sys.modules["homeassistant.core"] = MagicMock()
 sys.modules["homeassistant.components"] = MagicMock()
