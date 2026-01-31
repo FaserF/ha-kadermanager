@@ -7,6 +7,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
 
+from .coordinator import validate_input, CannotConnect, InvalidAuth
 from .const import (
     CONF_EVENT_LIMIT,
     CONF_FETCH_COMMENTS,
@@ -70,9 +71,19 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(user_input[CONF_TEAM_NAME])
             self._abort_if_unique_id_configured()
 
-            _LOGGER.debug("Initialized new kadermanager with id: %s", user_input[CONF_TEAM_NAME])
+            try:
+                await validate_input(self.hass, user_input)
 
-            return self.async_create_entry(title=user_input[CONF_TEAM_NAME], data=user_input)
+                _LOGGER.debug("Initialized new kadermanager with id: %s", user_input[CONF_TEAM_NAME])
+                return self.async_create_entry(title=user_input[CONF_TEAM_NAME], data=user_input)
+
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except Exception: # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception")
+                errors["base"] = "unknown"
 
         data_schema = vol.Schema(
             {

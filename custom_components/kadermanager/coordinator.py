@@ -124,8 +124,38 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
 # --- Scraper Helper Functions (moved from sensor.py) ---
 
-def _login(session: requests.Session, login_url: str, username: str, password: str):
-    """Perform login."""
+class CannotConnect(Exception):
+    """Error to indicate we cannot connect."""
+
+class InvalidAuth(Exception):
+    """Error to indicate there is invalid auth."""
+
+async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
+    """Validate the user input allows us to connect."""
+    teamname = data[CONF_TEAM_NAME]
+    username = data.get(CONF_USERNAME)
+    password = data.get(CONF_PASSWORD)
+
+    session = requests.Session()
+    session.headers.update({'User-Agent': USER_AGENT})
+
+    main_url = f"https://{teamname}.kadermanager.de"
+
+    try:
+        response = await hass.async_add_executor_job(session.get, main_url)
+        response.raise_for_status()
+    except Exception as e:
+        _LOGGER.error(f"Validation failed connecting to {main_url}: {e}")
+        raise CannotConnect from e
+
+    if username and password:
+        login_url = f"https://{teamname}.kadermanager.de/sessions/new"
+        success = await hass.async_add_executor_job(_login, session, login_url, username, password)
+        if not success:
+            raise InvalidAuth
+
+def _login(session: requests.Session, login_url: str, username: str, password: str) -> bool:
+    """Perform login. Returns True if successful."""
     try:
         _LOGGER.debug(f"Accessing login page: {login_url}")
         r_get = session.get(login_url, timeout=REQUEST_TIMEOUT)
@@ -162,12 +192,16 @@ def _login(session: requests.Session, login_url: str, username: str, password: s
 
         if r_post.status_code == 200:
             if "Invalid login" in r_post.text or "Anmeldung fehlgeschlagen" in r_post.text:
-                _LOGGER.error("Login failed. Continuing as guest.")
+                _LOGGER.error("Login failed during validation/scrape.")
+                return False
             else:
                 _LOGGER.debug("Login successful.")
+                return True
+        return False
 
     except Exception as e:
         _LOGGER.error(f"Error during login: {e}")
+        return False
 
 def _get_soup(session: requests.Session, url: str) -> Optional[BeautifulSoup]:
     try:

@@ -36,7 +36,9 @@
       "already_configured": "This Kadermanager is already configured"
     },
     "error": {
-      "unknown": "Unknown Error"
+      "unknown": "Unknown Error",
+      "cannot_connect": "Failed to connect. Check Team Name.",
+      "invalid_auth": "Invalid authentication."
     }
   }
 }
