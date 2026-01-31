@@ -1,0 +1,45 @@
+name: Weekly Scraper Check
+
+on:
+  schedule:
+    - cron: '0 8 * * 1' # Every Monday at 8:00
+  workflow_dispatch:      # Allow manual trigger
+
+jobs:
+  check-kadermanager:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
+      - name: Run Live Check
+        id: run_check
+        continue-on-error: true
+        run: python scripts/check_live.py
+
+      - name: Create Issue on Failure
+        if: steps.run_check.outcome == 'failure'
+        uses: dacbd/create-issue-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "⚠️ Integration Broken: Kadermanager Website Changed?"
+          body: |
+            The weekly check of the Kadermanager integration has failed.
+
+            This typically means the **kadermanager.de** website structure has changed, and the HTML classes used for scraping are no longer valid.
+
+            Please investigate `scripts/check_live.py` failures or run it locally to diagnose.
+
+            **Error Log:**
+            See usages in the Actions tab.
+          labels: bug, help wanted

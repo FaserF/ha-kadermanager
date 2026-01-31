@@ -12,6 +12,9 @@ The `kadermanager` integration retrieves event and participant information from 
 - **Event Tracking**: See upcoming games/trainings, dates, and locations.
 - **Participation Stats**: Monitor how many people accepted or declined.
 - **Comments**: View latest comments on events.
+- **Robustness**: Uses browser sessions and headers to avoid blocking.
+- **Authentication**: Supports login to fetch internal team events.
+- **Self-Repair**: Automatically detects persistent failures (>24h) and creates a generic Repair issue in Home Assistant.
 
 ## Installation 🛠️
 
@@ -22,6 +25,7 @@ This integration works as a **Custom Repository** in HACS.
 1.  Open HACS.
 2.  Add Custom Repository: `https://github.com/FaserF/ha-kadermanager` (Category: Integration).
 3.  Click **Download**.
+4.  Restart Home Assistant.
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=FaserF&repository=ha-kadermanager&category=integration)
 
@@ -30,6 +34,7 @@ This integration works as a **Custom Repository** in HACS.
 1.  Download the latest [Release](https://github.com/FaserF/ha-kadermanager/releases/latest).
 2.  Extract the ZIP file.
 3.  Copy the `kadermanager` folder to `<config>/custom_components/`.
+4.  Restart Home Assistant.
 
 ## Configuration ⚙️
 
@@ -41,70 +46,108 @@ This integration works as a **Custom Repository** in HACS.
 
 ### Configuration Variables
 - **Team Name**: Your subdomain (e.g., `teamname` for `teamname.kadermanager.de`).
+- **Username/Password**: (Optional) Providing credentials allows the integration to log in and fetch non-public events/details.
 - **Additional Settings**: Refresh interval, event limits, comment fetching.
 
 ## Sensor Attributes
-The data is being refreshed every 30 minutes per default, unless otherwise defined in the refresh time.
+The data is being refreshed every 30 minutes by default.
 
 ### General attributes
 - events:
   - original_date: Displays the Date and Time for the event
-  - comments: Displays event specific comments
-    - text
-    - author
-  - date: extracted date from original_date
-  - time: extraced time from original_date
+  - comments: Displays event specific comments (author, text)
+  - date: extracted date (ISO format)
+  - time: extracted time
   - in_count: Current count of people in for the event
-  - title: Event title (will be filled with the type if empty)
-  - type: Event type (training/game/other)
+  - title: Event title
+  - type: Event type (Training/Spiel/Sonstiges)
   - link: Link to the event
   - location: Location of the event
 
-### Attributes available with sign in / public events
-Those data will only be fetched for the next upcoming event.
-
-Currently signing in wont work, as bots seem to be blocked. But you can check your events to be public readable, then the following data can also be fetched:
+### Attributes available with public events
+If your events are public, the following data can also be fetched:
 
 - events:
   - players:
-    - accepted_players (will only be fetched if "fetch player info" is turned on): Players that accepted the event
-    - declined_players (will only be fetched if "fetch player info" is turned on): Players that declined the event
-    - no_response_players (will only be fetched if "fetch player info" is turned on): Players that gave no response if they are attending or not
+    - accepted_players: Players that accepted
+    - declined_players: Players that declined
+    - no_response_players: Players that gave no response
 
-- events:
-  - comments:
-    - author: player that has written the comment
-    - text: Text written in the comment
+## Troubleshooting ⚠️
 
-### Attributes available with sign in (doesnt matter if events are public)
-Currently signing in wont work, as bots seem to be blocked.
-- comments: Displays all general comments from the main page, which are not event related
+### Status "Unknown"
+If the sensor status shows "Unknown":
+1.  **Check Team Name**: Ensure your team name corresponds exactly to the subdomain (e.g., `https://myteam.kadermanager.de` -> `myteam`).
+2.  **Access/Login**: Ensure your "Events" page allows public viewing OR that you have provided valid username/password in the configuration. The integration attempts to log in if credentials are provided.
+3.  **Logs**: Enable debug logging to see what the scraper is receiving.
 
-## Automation example
-Send a reminder for the next event two days before
+```yaml
+logger:
+    logs:
+        custom_components.kadermanager: debug
+```
+
+## Automation Examples 🤖
+
+<details>
+<summary><b>📅 Reminder: Upcoming Event (2 days before)</b></summary>
+
+Send a notification 48 hours before the next event starts.
 
 ```yaml
 automation:
-  - alias: "Reminder for Kadermanager event two days before"
+  - alias: "Kadermanager Reminder - 2 Days Warning"
     trigger:
       - platform: template
-        value_template: "{{ as_timestamp(states.sensor.kadermanager_teamname.attributes.events[0].date) - as_timestamp(now()) <= 2 * 24 * 3600 }}"
+        value_template: "{{ as_timestamp(state_attr('sensor.kadermanager_teamname', 'events')[0].date) - as_timestamp(now()) <= 2 * 24 * 3600 }}"
     condition:
       - condition: template
-        value_template: "{{ states.sensor.kadermanager_teamname.attributes.events }}"
+        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events') }}"
     action:
       - service: notify.notify
         data_template:
-          title: "Upcoming kadermanager event"
+          title: "Upcoming Event"
           message: >
-            The next Kadermanager event is coming:
-            Type: {{ states.sensor.kadermanager_teamname.attributes.events[0].type }}
-            Titel: {{ states.sensor.kadermanager_teamname.attributes.events[0].title }}
-            Accepted Count: {{ states.sensor.kadermanager_teamname.attributes.events[0].in_count }}
-            Who has declined: {{ states.sensor.kadermanager_teamname.attributes.events[0].players.declined_players | join(', ') }}
+            Next Event: {{ state_attr('sensor.kadermanager_teamname', 'events')[0].title }}
+            Date: {{ state_attr('sensor.kadermanager_teamname', 'events')[0].original_date }}
+            Participants: {{ state_attr('sensor.kadermanager_teamname', 'events')[0].in_count }}
 ```
+</details>
 
-Send a message if a new kadermanager event has been written
+<details>
+<summary><b>⚠️ Alert: Low Participation Count</b></summary>
+
+Warn if less than 6 players are signed up 24 hours before a game.
+
+```yaml
+automation:
+  - alias: "Kadermanager - Low Participation Warning"
+    trigger:
+      - platform: template
+        value_template: "{{ as_timestamp(state_attr('sensor.kadermanager_teamname', 'events')[0].date) - as_timestamp(now()) < 24 * 3600 }}"
+    condition:
+      # Ensure there are events
+      - condition: template
+        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events') }}"
+      # Check it is a Game ("Spiel")
+      - condition: template
+        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].type == 'Spiel' }}"
+      # Check count safe casting to int
+      - condition: template
+        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].in_count | int(0) < 6 }}"
+    action:
+      - service: notify.notify
+        data:
+          title: "Low Player Count!"
+          message: "Warning: Only {{ state_attr('sensor.kadermanager_teamname', 'events')[0].in_count }} players for tomorrow's game!"
+```
+</details>
+
+<details>
+<summary><b>💬 Notification: New Comment Posted</b></summary>
+
+Get notified when a teammate writes a new comment.
+
 ```yaml
 automation:
   - alias: "Notification on New Comment"
@@ -112,19 +155,45 @@ automation:
       - platform: state
         entity_id: sensor.kadermanager_teamname
     condition:
-      # Check if the comment has changed
-      condition: template
-      value_template: >
-        {% set old_comments = trigger.from_state.attributes.events[0].comments if trigger.from_state.attributes.events else [] %}
-        {% set new_comments = trigger.to_state.attributes.events[0].comments if trigger.to_state.attributes.events else [] %}
-        {{ new_comments | length > old_comments | length }}
+      - condition: template
+        value_template: >
+          {% set old_comments = trigger.from_state.attributes.events[0].comments if trigger.from_state.attributes.events else [] %}
+          {% set new_comments = trigger.to_state.attributes.events[0].comments if trigger.to_state.attributes.events else [] %}
+          {{ new_comments | length > old_comments | length }}
     action:
       - service: notify.notify
         data:
           message: >
-            New comment by {{ states.sensor.kadermanager_teamname.attributes.events[0].comments[0].author }}:
-            {{ states.sensor.kadermanager_teamname.attributes.events[0].comments[0].text }}
+            New comment by {{ state_attr('sensor.kadermanager_teamname', 'events')[0].comments[0].author }}:
+            {{ state_attr('sensor.kadermanager_teamname', 'events')[0].comments[0].text }}
 ```
+</details>
+
+<details>
+<summary><b>🏟️ Announcement: Game Day!</b></summary>
+
+Send a morning briefing if a game is scheduled for today.
+
+```yaml
+automation:
+  - alias: "Kadermanager - Game Day"
+    trigger:
+      - platform: time
+        at: "08:00:00"
+    condition:
+      - condition: template
+        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events') }}"
+      - condition: template
+        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].date == now().strftime('%Y-%m-%d') }}"
+      - condition: template
+        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].type == 'Spiel' }}"
+    action:
+      - service: notify.notify
+        data:
+          title: "Matchday!"
+          message: "Ready for the game against {{ state_attr('sensor.kadermanager_teamname', 'events')[0].title }} today at {{ state_attr('sensor.kadermanager_teamname', 'events')[0].time }}?"
+```
+</details>
 
 ## Bug reporting
 Open an issue over at [github issues](https://github.com/FaserF/ha-kadermanager/issues). Please prefer sending over a log with debugging enabled.
@@ -141,5 +210,4 @@ You can then find the log in the HA settings -> System -> Logs -> Enter "kaderma
 
 ## Thanks to
 Thanks to Kadermanager for their great free software!
-
 The data is coming from the [kadermanager.de](https://kadermanager.de/) website.
