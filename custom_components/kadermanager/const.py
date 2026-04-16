@@ -1,4 +1,5 @@
 """Kadermanager"""
+
 DOMAIN = "kadermanager"
 ATTRIBUTION = "Data provided by kadermanager.de"
 

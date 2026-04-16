@@ -12,8 +12,10 @@ The `kadermanager` integration retrieves event and participant information from 
 - **Event Tracking**: See upcoming games/trainings, dates, and locations.
 - **Participation Stats**: Monitor how many people accepted or declined.
 - **Comments**: View latest comments on events.
-- **Robustness**: Uses browser sessions and headers to avoid blocking.
-- **Authentication**: Supports login to fetch internal team events.
+- **Modern Communication**: Uses asynchronous `aiohttp` and browsers-like headers to blend in and avoid blocking.
+- **Persistent Sessions**: Maintains login state across updates to minimize redundant authentication.
+- **Persistence & Survival**: Caches data locally to survive Home Assistant restarts and temporary IP bans.
+- **Bot Protection**: Implements automated back-off and jitter to stay below request limits.
 - **Self-Repair**: Automatically detects persistent failures (>24h) and creates a generic Repair issue in Home Assistant.
 
 ## Installation 🛠️
@@ -50,7 +52,7 @@ This integration works as a **Custom Repository** in HACS.
 - **Additional Settings**: Refresh interval, event limits, comment fetching.
 
 ## Sensor Attributes
-The data is being refreshed every 30 minutes by default.
+The data is being refreshed every 60 minutes by default.
 
 ### General attributes
 - events:
