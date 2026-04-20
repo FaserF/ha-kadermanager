@@ -60,7 +60,7 @@ class KadermanagerCalendar(CoordinatorEntity, CalendarEntity):
             "name": f"Kadermanager {self.teamname}",
             "manufacturer": "Kadermanager",
             "model": "Team Schedule",
-            "configuration_url": f"https://{self.teamname}.kadermanager.de",
+            "configuration_url": f"https://{self.teamname.lower()}.kadermanager.de",
         }
 
     @property

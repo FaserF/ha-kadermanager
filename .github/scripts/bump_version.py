@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
     # Handle the case where the user might have provided a manual version or similar
     # but here we rely on the tag.
-    
+
     new_v = bump_version(current_v, bump_type, release_status)
 
     update_files(new_v)

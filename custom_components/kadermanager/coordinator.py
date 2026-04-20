@@ -1,5 +1,7 @@
 import logging
 import asyncio
+import socket
+
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 from bs4 import BeautifulSoup
@@ -24,7 +26,8 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=20)
+REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+
 ISSUE_ID_CONNECTION = "connection_error"
 
 DEFAULT_HEADERS = {
@@ -35,10 +38,6 @@ DEFAULT_HEADERS = {
     "DNT": "1",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
 }
 
 
@@ -129,10 +128,14 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_scrape_data(self) -> Dict[str, Any]:
         """Asynchronous scraping logic."""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession(headers=DEFAULT_HEADERS)
+            connector = aiohttp.TCPConnector(family=socket.AF_INET)
+            self._session = aiohttp.ClientSession(
+                headers=DEFAULT_HEADERS, connector=connector
+            )
             self._logged_in = False
 
-        team_url = f"https://{self.teamname}.kadermanager.de"
+        teamname_lower = self.teamname.lower()
+        team_url = f"https://{teamname_lower}.kadermanager.de"
         events_url = f"{team_url}/events"
         login_url = f"{team_url}/sessions/new"
 
@@ -141,10 +144,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             self._logged_in = await self._async_login(login_url)
 
         # 2. Fetch main events page and home page (for enrollments)
-        # We can fetch them in parallel
-        events_page, home_page = await asyncio.gather(
-            self._async_get_url(events_url), self._async_get_url(team_url)
-        )
+        # We fetch them sequentially to be gentler on the API and avoid connection resets
+        events_page = await self._async_get_url(events_url)
+        home_page = await self._async_get_url(team_url)
 
         if not events_page:
             # Maybe session expired? Try one re-login if we have credentials
@@ -247,11 +249,25 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 html = await resp.text()
 
             soup = BeautifulSoup(html, "html.parser")
+            token = ""
             token_input = soup.find("input", {"name": "authenticity_token"})
-            if not token_input:
-                _LOGGER.error("Could not find authenticity_token on login page")
+            if token_input:
+                t_val = token_input.get("value")
+                token = str(t_val[0] if isinstance(t_val, list) else t_val or "")
+            else:
+                # Fallback to meta tag if input not found
+                token_meta = soup.find("meta", {"name": "csrf-token"})
+                if token_meta:
+                    token_val = token_meta.get("content")
+                    token = str(
+                        token_val[0] if isinstance(token_val, list) else token_val or ""
+                    )
+
+            if not token:
+                _LOGGER.error(
+                    "Could not find authenticity_token or csrf-token on login page"
+                )
                 return False
-            token = token_input.get("value") if token_input else ""
 
             payload = {
                 "authenticity_token": token,
@@ -546,12 +562,16 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
 async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
     """Validate the user input allows us to connect (Shared validation)."""
-    teamname = data[CONF_TEAM_NAME]
+    teamname = data[CONF_TEAM_NAME].lower()
     username = data.get(CONF_USERNAME)
     password = data.get(CONF_PASSWORD)
 
-    async with aiohttp.ClientSession(headers=DEFAULT_HEADERS) as session:
+    connector = aiohttp.TCPConnector(family=socket.AF_INET)
+    async with aiohttp.ClientSession(
+        headers=DEFAULT_HEADERS, connector=connector
+    ) as session:
         main_url = f"https://{teamname}.kadermanager.de"
+
         try:
             async with session.get(main_url, timeout=REQUEST_TIMEOUT) as resp:
                 resp.raise_for_status()

@@ -71,9 +71,11 @@ class MockCalendarEntity:
         pass
 
 
-ha_sensor_mock = sys.modules["homeassistant.components.sensor"]
-ha_sensor_mock.SensorEntity = MockSensorEntity
+ha_sensor_mock = sys.modules.get("homeassistant.components.sensor")
+if ha_sensor_mock:
+    ha_sensor_mock.SensorEntity = MockSensorEntity  # type: ignore
 
-ha_calendar_mock = sys.modules["homeassistant.components.calendar"]
-ha_calendar_mock.CalendarEntity = MockCalendarEntity
-ha_calendar_mock.CalendarEvent = MagicMock
+ha_calendar_mock = sys.modules.get("homeassistant.components.calendar")
+if ha_calendar_mock:
+    ha_calendar_mock.CalendarEntity = MockCalendarEntity  # type: ignore
+    ha_calendar_mock.CalendarEvent = MagicMock  # type: ignore

@@ -120,6 +120,7 @@ def test_calendar_parsing(coordinator):
     }
 
     cal_event = calendar._parse_event(event_data)
+    assert cal_event is not None
 
     assert cal_event.summary == "Training: Evening session"
     assert cal_event.location == "Pitch 1"
