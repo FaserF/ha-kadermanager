@@ -34,10 +34,13 @@ DEFAULT_HEADERS = {
     "User-Agent": USER_AGENT,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
     "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate",
     "DNT": "1",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
 }
 
 
@@ -146,17 +149,20 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         # 2. Fetch main events page and home page (for enrollments)
         # We fetch them sequentially to be gentler on the API and avoid connection resets
         events_page = await self._async_get_url(events_url)
+        await asyncio.sleep(0.5)  # Jitter
         home_page = await self._async_get_url(team_url)
 
         if not events_page:
             # Maybe session expired? Try one re-login if we have credentials
             if self.username and self.password:
                 _LOGGER.debug("Events page fetch failed, attempting re-login")
+                await asyncio.sleep(1)
                 self._logged_in = await self._async_login(login_url)
+                await asyncio.sleep(0.5)
                 events_page = await self._async_get_url(events_url)
 
             if not events_page:
-                raise UpdateFailed("Failed to fetch events page")
+                raise UpdateFailed("Failed to fetch events page (maybe IP blocked or session expired)")
 
         # 3. Parse events
         events = self.parse_events(events_page, home_page, team_url)
@@ -304,13 +310,22 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         """Fetch URL content."""
         try:
             assert self._session is not None
-            async with self._session.get(url, timeout=REQUEST_TIMEOUT) as resp:
+            # Update referer for each request to look more natural
+            headers = {**DEFAULT_HEADERS, "Referer": f"https://{self.teamname.lower()}.kadermanager.de/"}
+            async with self._session.get(url, timeout=REQUEST_TIMEOUT, headers=headers) as resp:
                 if resp.status == 429:
+                    _LOGGER.error("Rate limit hit (429) for %s", url)
                     raise aiohttp.ClientResponseError(
                         resp.request_info, resp.history, status=429
                     )
+                if resp.status == 403:
+                    _LOGGER.error("Access forbidden (403) for %s - possibly bot detection or IP ban", url)
+                
                 resp.raise_for_status()
                 return await resp.text()
+        except aiohttp.ClientResponseError as e:
+            _LOGGER.error("HTTP error fetching %s: %s (Status: %s)", url, e.message, e.status)
+            return None
         except Exception as e:
             _LOGGER.error("Failed to fetch %s: %s", url, e)
             return None
@@ -573,24 +588,37 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
         main_url = f"https://{teamname}.kadermanager.de"
 
         try:
-            async with session.get(main_url, timeout=REQUEST_TIMEOUT) as resp:
+            headers = {**DEFAULT_HEADERS, "Referer": "https://www.kadermanager.de/"}
+            async with session.get(main_url, timeout=REQUEST_TIMEOUT, headers=headers) as resp:
+                if resp.status == 403:
+                    _LOGGER.error("Access forbidden (403) during validation - possibly IP blocked")
+                    raise CannotConnect("IP blocked or access forbidden")
                 resp.raise_for_status()
         except Exception as e:
-            _LOGGER.error("Validation failed connecting to %s: %s", main_url, e)
-            raise CannotConnect from e
+            if not isinstance(e, CannotConnect):
+                _LOGGER.error("Validation failed connecting to %s: %s", main_url, e)
+                raise CannotConnect from e
+            raise
 
         if username and password:
             login_url = f"{main_url}/sessions/new"
-            # We reuse the logic but in a simplified way for validation
-            # Since we don't have a coordinator yet.
             try:
-                async with session.get(login_url, timeout=REQUEST_TIMEOUT) as resp:
+                async with session.get(login_url, timeout=REQUEST_TIMEOUT, headers=headers) as resp:
                     resp.raise_for_status()
                     html = await resp.text()
 
                 soup = BeautifulSoup(html, "html.parser")
-                token = soup.find("input", {"name": "authenticity_token"})
-                token_val = token.get("value") if token else ""
+                token_input = soup.find("input", {"name": "authenticity_token"})
+                token_val = ""
+                if token_input:
+                    t_val = token_input.get("value")
+                    token_val = str(t_val[0] if isinstance(t_val, list) else t_val or "")
+                
+                if not token_val:
+                    token_meta = soup.find("meta", {"name": "csrf-token"})
+                    if token_meta:
+                        m_val = token_meta.get("content")
+                        token_val = str(m_val[0] if isinstance(m_val, list) else m_val or "")
 
                 payload = {
                     "authenticity_token": token_val,
@@ -607,8 +635,10 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
                     else login_url
                 )
 
+                # Set referer to login page for the POST
+                post_headers = {**headers, "Referer": login_url}
                 async with session.post(
-                    post_url, data=payload, timeout=REQUEST_TIMEOUT
+                    post_url, data=payload, timeout=REQUEST_TIMEOUT, headers=post_headers
                 ) as resp:
                     if resp.status == 200:
                         text = await resp.text()
@@ -617,8 +647,10 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
                             or "Anmeldung fehlgeschlagen" in text
                         ):
                             raise InvalidAuth
+                    elif resp.status == 403:
+                        raise CannotConnect("IP blocked during login")
                     else:
-                        raise CannotConnect
+                        raise CannotConnect(f"Login failed with status {resp.status}")
             except (InvalidAuth, CannotConnect):
                 raise
             except Exception as e:

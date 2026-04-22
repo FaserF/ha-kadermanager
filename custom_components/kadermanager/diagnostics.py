@@ -11,16 +11,29 @@ from homeassistant.core import HomeAssistant
 from .const import CONF_PASSWORD, CONF_USERNAME, DOMAIN
 from .coordinator import KadermanagerDataUpdateCoordinator
 
-TO_REDACT = {CONF_USERNAME, CONF_PASSWORD}
+TO_REDACT = {CONF_USERNAME, CONF_PASSWORD, "password", "username", "email"}
 
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    coordinator: KadermanagerDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: KadermanagerDataUpdateCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
 
-    return {
+    diag_data = {
         "config_entry": async_redact_data(entry.as_dict(), TO_REDACT),
-        "coordinator_data": coordinator.data,
     }
+
+    if coordinator:
+        diag_data["coordinator_data"] = async_redact_data(coordinator.data or {}, TO_REDACT)
+        diag_data["coordinator_state"] = {
+            "last_success": coordinator.last_success.isoformat() if coordinator.last_success else None,
+            "logged_in": coordinator._logged_in,
+            "backoff_until": coordinator._backoff_until.isoformat() if coordinator._backoff_until else None,
+            "teamname": coordinator.teamname,
+            "update_interval": str(coordinator.update_interval),
+        }
+    else:
+        diag_data["coordinator_state"] = "not_initialized"
+
+    return diag_data
