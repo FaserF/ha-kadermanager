@@ -7,6 +7,8 @@ ha_mock = MagicMock()
 sys.modules["homeassistant"] = ha_mock
 
 # Helper mocks
+sys.modules["homeassistant.exceptions"] = MagicMock()
+sys.modules["homeassistant.loader"] = MagicMock()
 sys.modules["homeassistant.helpers"] = MagicMock()
 sys.modules["homeassistant.helpers.config_validation"] = MagicMock()
 sys.modules["homeassistant.helpers.entity_platform"] = MagicMock()
