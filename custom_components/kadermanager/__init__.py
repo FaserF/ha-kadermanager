@@ -2,6 +2,7 @@ import logging
 from homeassistant import config_entries, core
 
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.update_coordinator import UpdateFailed
 from .const import DOMAIN, PLATFORMS
 from .coordinator import KadermanagerDataUpdateCoordinator
 
@@ -23,11 +24,10 @@ async def async_setup_entry(
 
     try:
         await coordinator.async_config_entry_first_refresh()
-    except UpdateFailed:
-        # We still want to continue to allow diagnostics and options updates if possible,
-        # but HA expects an error or success here. 
-        # If we raise ConfigEntryNotReady, HA will retry.
-        pass
+    except UpdateFailed as err:
+        # Raise ConfigEntryNotReady so HA retries setup automatically
+        # once the server becomes reachable again.
+        raise ConfigEntryNotReady(f"Error communicating with Kadermanager: {err}") from err
 
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 

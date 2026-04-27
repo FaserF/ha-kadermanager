@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import socket
+import random
 
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -99,10 +100,21 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             return self.data
 
         try:
-            async with asyncio.timeout(60):
-                data = await self._async_scrape_data()
-                await self.store.async_save(data)
-                return data
+            # Get or create a domain-wide lock to prevent multiple Kadermanager entries
+            # from scraping at the exact same time (e.g. after a HA reboot).
+            domain_data = self.hass.data.setdefault(DOMAIN, {})
+            scrape_lock = domain_data.setdefault("scrape_lock", asyncio.Lock())
+            
+            async with scrape_lock:
+                # Add a random delay before starting the scrape.
+                # If two teams start exactly together, the second one will wait for the first to finish.
+                # When the first finishes, the second one wakes up and waits 1-3 secs before hitting the API.
+                await asyncio.sleep(random.uniform(1.0, 3.0))
+
+                async with asyncio.timeout(60):
+                    data = await self._async_scrape_data()
+                    await self.store.async_save(data)
+                    return data
         except Exception as err:
             # Handle repair logic
             if self.last_success and (datetime.now() - self.last_success) > timedelta(
@@ -149,16 +161,16 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         # 2. Fetch main events page and home page (for enrollments)
         # We fetch them sequentially to be gentler on the API and avoid connection resets
         events_page = await self._async_get_url(events_url)
-        await asyncio.sleep(0.5)  # Jitter
+        await asyncio.sleep(random.uniform(1.5, 3.0))  # Significant random jitter
         home_page = await self._async_get_url(team_url)
 
         if not events_page:
             # Maybe session expired? Try one re-login if we have credentials
             if self.username and self.password:
                 _LOGGER.debug("Events page fetch failed, attempting re-login")
-                await asyncio.sleep(1)
+                await asyncio.sleep(random.uniform(2.0, 4.0))
                 self._logged_in = await self._async_login(login_url)
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(random.uniform(1.5, 3.0))
                 events_page = await self._async_get_url(events_url)
 
             if not events_page:
@@ -207,14 +219,14 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
         if detail_tasks:
             _LOGGER.debug("Fetching details for %s event(s)", len(detail_tasks))
-            # Use a semaphore to limit concurrency and avoid bot detection,
-            # while still being faster than purely sequential fetching.
-            semaphore = asyncio.Semaphore(2)
+            # Use a semaphore of 1 (sequential) to completely avoid parallel requests
+            # and use random delays to simulate human behavior.
+            semaphore = asyncio.Semaphore(1)
 
             async def sem_task(task):
                 async with semaphore:
                     await task
-                    await asyncio.sleep(0.2)  # Tiny jitter between requests
+                    await asyncio.sleep(random.uniform(1.5, 3.5))  # Large random jitter between requests
 
             await asyncio.gather(*(sem_task(task) for task in detail_tasks))
 
