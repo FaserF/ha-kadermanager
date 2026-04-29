@@ -104,7 +104,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             # from scraping at the exact same time (e.g. after a HA reboot).
             domain_data = self.hass.data.setdefault(DOMAIN, {})
             scrape_lock = domain_data.setdefault("scrape_lock", asyncio.Lock())
-            
+
             async with scrape_lock:
                 # Add a random delay before starting the scrape.
                 # If two teams start exactly together, the second one will wait for the first to finish.
@@ -137,6 +137,11 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER.error(
                     "Received 429 (Too Many Requests). Backing off for 1 hour"
                 )
+            elif isinstance(err, (aiohttp.ClientConnectorError, CannotConnect)) or (isinstance(err, UpdateFailed) and ("Connect call failed" in str(err) or "Failed to fetch events page" in str(err))):
+                self._backoff_until = datetime.now() + timedelta(minutes=60)
+                _LOGGER.error(
+                    "Connection dropped (softban or WAF block). Backing off for 60 minutes"
+                )
 
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
@@ -157,6 +162,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         # 1. Login if needed
         if self.username and self.password and not self._logged_in:
             self._logged_in = await self._async_login(login_url)
+            await asyncio.sleep(random.uniform(3.0, 5.0))  # Extra delay after login before fetching events
 
         # 2. Fetch main events page and home page (for enrollments)
         # We fetch them sequentially to be gentler on the API and avoid connection resets
@@ -303,6 +309,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
             _LOGGER.debug("Submitting login form")
             assert self._session is not None
+            await asyncio.sleep(random.uniform(1.5, 3.5))
             async with self._session.post(
                 post_url, data=payload, timeout=REQUEST_TIMEOUT
             ) as resp:
@@ -332,12 +339,15 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                 if resp.status == 403:
                     _LOGGER.error("Access forbidden (403) for %s - possibly bot detection or IP ban", url)
-                
+
                 resp.raise_for_status()
                 return await resp.text()
         except aiohttp.ClientResponseError as e:
             _LOGGER.error("HTTP error fetching %s: %s (Status: %s)", url, e.message, e.status)
             return None
+        except aiohttp.ClientConnectorError as e:
+            _LOGGER.error("Connection error fetching %s: %s - possibly softbanned", url, e)
+            raise CannotConnect(f"Connection failed: {e}") from e
         except Exception as e:
             _LOGGER.error("Failed to fetch %s: %s", url, e)
             return None
@@ -615,6 +625,7 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
         if username and password:
             login_url = f"{main_url}/sessions/new"
             try:
+                await asyncio.sleep(random.uniform(1.0, 3.0))
                 async with session.get(login_url, timeout=REQUEST_TIMEOUT, headers=headers) as resp:
                     resp.raise_for_status()
                     html = await resp.text()
@@ -625,7 +636,7 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
                 if token_input:
                     t_val = token_input.get("value")
                     token_val = str(t_val[0] if isinstance(t_val, list) else t_val or "")
-                
+
                 if not token_val:
                     token_meta = soup.find("meta", {"name": "csrf-token"})
                     if token_meta:
@@ -649,6 +660,7 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
 
                 # Set referer to login page for the POST
                 post_headers = {**headers, "Referer": login_url}
+                await asyncio.sleep(random.uniform(1.0, 3.0))
                 async with session.post(
                     post_url, data=payload, timeout=REQUEST_TIMEOUT, headers=post_headers
                 ) as resp:
