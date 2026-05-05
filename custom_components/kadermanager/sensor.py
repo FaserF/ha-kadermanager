@@ -56,19 +56,19 @@ class KadermanagerSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        if not self.coordinator.data:
-            return {}
-
+        data = self.coordinator.data or {}
         attrs = {
-            "events": self.coordinator.data.get("events", []),
+            "events": data.get("events", []),
             "last_updated": (
                 self.coordinator.last_success.isoformat()
                 if self.coordinator.last_success
                 else None
             ),
         }
-        if "general_comments" in self.coordinator.data:
-            attrs["comments"] = self.coordinator.data["general_comments"]
+        if "general_comments" in data:
+            attrs["comments"] = data["general_comments"]
+        elif "comments" not in attrs:
+            attrs["comments"] = []
 
         return attrs
 

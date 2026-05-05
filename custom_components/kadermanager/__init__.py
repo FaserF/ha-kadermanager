@@ -25,9 +25,17 @@ async def async_setup_entry(
     try:
         await coordinator.async_config_entry_first_refresh()
     except UpdateFailed as err:
-        # Raise ConfigEntryNotReady so HA retries setup automatically
-        # once the server becomes reachable again.
-        raise ConfigEntryNotReady(f"Error communicating with Kadermanager: {err}") from err
+        if not coordinator.data:
+            # Raise ConfigEntryNotReady so HA retries setup automatically
+            # once the server becomes reachable again.
+            raise ConfigEntryNotReady(
+                f"Error communicating with Kadermanager: {err}"
+            ) from err
+        _LOGGER.warning(
+            "Initial update failed for %s, using cached data. Error: %s",
+            coordinator.teamname,
+            err,
+        )
 
     entry.async_on_unload(entry.add_update_listener(async_update_options))
 

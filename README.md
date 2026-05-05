@@ -101,18 +101,22 @@ automation:
   - alias: "Kadermanager Reminder - 2 Days Warning"
     trigger:
       - platform: template
-        value_template: "{{ as_timestamp(state_attr('sensor.kadermanager_teamname', 'events')[0].date) - as_timestamp(now()) <= 2 * 24 * 3600 }}"
-    condition:
-      - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events') }}"
+        value_template: >
+          {% set events = state_attr('sensor.kadermanager_teamname', 'events') %}
+          {% if events and events | count > 0 %}
+            {{ as_timestamp(events[0].date) - as_timestamp(now()) <= 2 * 24 * 3600 }}
+          {% else %}
+            false
+          {% endif %}
     action:
       - service: notify.notify
-        data_template:
+        data:
           title: "Upcoming Event"
           message: >
-            Next Event: {{ state_attr('sensor.kadermanager_teamname', 'events')[0].title }}
-            Date: {{ state_attr('sensor.kadermanager_teamname', 'events')[0].original_date }}
-            Participants: {{ state_attr('sensor.kadermanager_teamname', 'events')[0].in_count }}
+            {% set event = state_attr('sensor.kadermanager_teamname', 'events')[0] %}
+            Next Event: {{ event.title }}
+            Date: {{ event.original_date }}
+            Participants: {{ event.in_count }}
 ```
 </details>
 
@@ -126,22 +130,26 @@ automation:
   - alias: "Kadermanager - Low Participation Warning"
     trigger:
       - platform: template
-        value_template: "{{ as_timestamp(state_attr('sensor.kadermanager_teamname', 'events')[0].date) - as_timestamp(now()) < 24 * 3600 }}"
+        value_template: >
+          {% set events = state_attr('sensor.kadermanager_teamname', 'events') %}
+          {% if events and events | count > 0 %}
+            {{ as_timestamp(events[0].date) - as_timestamp(now()) < 24 * 3600 }}
+          {% else %}
+            false
+          {% endif %}
     condition:
-      # Ensure there are events
+      # Check it is a Game ("Spiel") and count is low
       - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events') }}"
-      # Check it is a Game ("Spiel")
-      - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].type == 'Spiel' }}"
-      # Check count safe casting to int
-      - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].in_count | int(0) < 6 }}"
+        value_template: >
+          {% set events = state_attr('sensor.kadermanager_teamname', 'events') %}
+          {{ events and events | count > 0 and events[0].type == 'Spiel' and events[0].in_count | int(0) < 6 }}
     action:
       - service: notify.notify
         data:
           title: "Low Player Count!"
-          message: "Warning: Only {{ state_attr('sensor.kadermanager_teamname', 'events')[0].in_count }} players for tomorrow's game!"
+          message: >
+            {% set event = state_attr('sensor.kadermanager_teamname', 'events')[0] %}
+            Warning: Only {{ event.in_count }} players for tomorrow's game!
 ```
 </details>
 
@@ -159,15 +167,20 @@ automation:
     condition:
       - condition: template
         value_template: >
-          {% set old_comments = trigger.from_state.attributes.events[0].comments if trigger.from_state.attributes.events else [] %}
-          {% set new_comments = trigger.to_state.attributes.events[0].comments if trigger.to_state.attributes.events else [] %}
-          {{ new_comments | length > old_comments | length }}
+          {% set old_events = trigger.from_state.attributes.events if trigger.from_state and trigger.from_state.attributes.events else [] %}
+          {% set new_events = trigger.to_state.attributes.events if trigger.to_state and trigger.to_state.attributes.events else [] %}
+          {% if old_events | count > 0 and new_events | count > 0 %}
+            {{ new_events[0].comments | length > old_events[0].comments | length }}
+          {% else %}
+            false
+          {% endif %}
     action:
       - service: notify.notify
         data:
           message: >
-            New comment by {{ state_attr('sensor.kadermanager_teamname', 'events')[0].comments[0].author }}:
-            {{ state_attr('sensor.kadermanager_teamname', 'events')[0].comments[0].text }}
+            {% set event = state_attr('sensor.kadermanager_teamname', 'events')[0] %}
+            New comment by {{ event.comments[0].author }}:
+            {{ event.comments[0].text }}
 ```
 </details>
 
@@ -184,16 +197,16 @@ automation:
         at: "08:00:00"
     condition:
       - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events') }}"
-      - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].date == now().strftime('%Y-%m-%d') }}"
-      - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].type == 'Spiel' }}"
+        value_template: >
+          {% set events = state_attr('sensor.kadermanager_teamname', 'events') %}
+          {{ events and events | count > 0 and events[0].date == now().strftime('%Y-%m-%d') and events[0].type == 'Spiel' }}
     action:
       - service: notify.notify
         data:
           title: "Matchday!"
-          message: "Ready for the game against {{ state_attr('sensor.kadermanager_teamname', 'events')[0].title }} today at {{ state_attr('sensor.kadermanager_teamname', 'events')[0].time }}?"
+          message: >
+            {% set event = state_attr('sensor.kadermanager_teamname', 'events')[0] %}
+            Ready for the game against {{ event.title }} today at {{ event.time }}?
 ```
 </details>
 

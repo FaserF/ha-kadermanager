@@ -418,7 +418,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             if link.startswith("/"):
                 link = f"{team_url}{link}"
 
-            in_count: int | str = "Unknown"
+            in_count: int | None = None
             # Try to match by link first (most robust)
             link_path = "/" + "/".join(link.split("/")[3:]) if "://" in link else link
             if link_path in enrollment_map:
@@ -591,8 +591,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 if target_date.month < today.month - 6:
                     target_date = target_date.replace(year=today.year + 1)
             except (ValueError, IndexError):
-                _LOGGER.debug("Could not parse date string: %s", date_str)
-                return "Unknown", "Unknown"
+                return None, None
 
         return target_date.strftime("%Y-%m-%d"), time_part
 
