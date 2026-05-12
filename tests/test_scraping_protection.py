@@ -38,6 +38,7 @@ class TestScrapingProtection(unittest.IsolatedAsyncioTestCase):
         # Simulate a 403 block using a custom exception with status
         class MockResponseError(Exception):
             status = 403
+
         err = MockResponseError()
 
         # Mock internal methods to avoid side effects
@@ -64,4 +65,6 @@ class TestScrapingProtection(unittest.IsolatedAsyncioTestCase):
                     await self.coordinator._async_update_data()
 
         self.assertEqual(self.coordinator._consecutive_failures, 1)
-        self.assertEqual(self.coordinator._backoff_until, now_val + timedelta(minutes=60))
+        self.assertEqual(
+            self.coordinator._backoff_until, now_val + timedelta(minutes=60)
+        )
