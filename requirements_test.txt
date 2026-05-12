@@ -1,0 +1,9 @@
+ruff
+mypy
+pyyaml
+pytest
+pytest-asyncio
+pytest-cov
+homeassistant
+aiohttp
+beautifulsoup4
