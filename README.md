@@ -15,8 +15,11 @@ The `kadermanager` integration retrieves event and participant information from 
 - **Modern Communication**: Uses asynchronous `aiohttp` and browsers-like headers to blend in and avoid blocking.
 - **Persistent Sessions**: Maintains login state across updates to minimize redundant authentication.
 - **Persistence & Survival**: Caches data locally to survive Home Assistant restarts and temporary IP bans.
-- **Bot Protection**: Implements automated back-off and jitter to stay below request limits.
+- **Bot Protection**: Implements automated back-off, randomized jitter, and rotated User-Agents to stay below request limits and mimic human behavior.
 - **Self-Repair**: Automatically detects persistent failures (>24h) and creates a generic Repair issue in Home Assistant.
+
+> [!WARNING]
+> **Softbans & Scraping Policy**: Since this integration uses web scraping, it is subject to the website's anti-bot measures. To ensure long-term stability and avoid permanent IP bans, the minimum update interval is enforced at **60 minutes**. Frequent requests (under 60 min) significantly increase the risk of being softbanned by the Kadermanager firewall.
 
 ## Installation 🛠️
 

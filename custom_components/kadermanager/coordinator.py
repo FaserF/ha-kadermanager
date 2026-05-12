@@ -5,6 +5,7 @@ import random
 
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+import re
 from bs4 import BeautifulSoup
 import aiohttp
 from urllib.parse import urljoin
@@ -26,23 +27,46 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:145.0) Gecko/20100101 Firefox/145.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:145.0) Gecko/20100101 Firefox/145.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0",
+]
+
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 ISSUE_ID_CONNECTION = "connection_error"
 
-DEFAULT_HEADERS = {
-    "User-Agent": USER_AGENT,
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
-    "DNT": "1",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "same-origin",
-    "Sec-Fetch-User": "?1",
-}
+def get_random_headers(teamname: str) -> Dict[str, str]:
+    """Generate random headers to mimic a real browser."""
+    ua = random.choice(USER_AGENTS)
+    headers = {
+        "User-Agent": ua,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "de-DE,de;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "same-origin",
+        "Sec-Fetch-User": "?1",
+        "Cache-Control": "max-age=0",
+        "Referer": f"https://{teamname.lower()}.kadermanager.de/",
+    }
+    
+    # Add Sec-CH-UA headers for Chrome-based browsers
+    if "Chrome" in ua:
+        headers["Sec-CH-UA"] = '"Google Chrome";v="148", "Chromium";v="148", "Not=A?Brand";v="99"'
+        headers["Sec-CH-UA-Mobile"] = "?0"
+        headers["Sec-CH-UA-Platform"] = '"Windows"' if "Windows" in ua else '"macOS"'
+        
+    return headers
+
 
 
 class CannotConnect(Exception):
@@ -72,15 +96,17 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         self._session: Optional[aiohttp.ClientSession] = None
         self._logged_in = False
         self._backoff_until: Optional[datetime] = None
+        self._consecutive_failures = 0
+        self._headers = get_random_headers(self.teamname)
 
         # Increase default update interval if it's too small
-        interval = config.get(CONF_UPDATE_INTERVAL, 30)
-        if interval < 15:
+        interval = config.get(CONF_UPDATE_INTERVAL, 60)
+        if interval < 60:
             _LOGGER.warning(
-                "Update interval of %s minutes is too low, using 15 minutes to avoid IP blocks",
+                "Update interval of %s minutes is too low, using 60 minutes to avoid IP blocks (softbans)",
                 interval,
             )
-            interval = 15
+            interval = 60
 
         update_interval = timedelta(minutes=interval)
 
@@ -106,14 +132,13 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             scrape_lock = domain_data.setdefault("scrape_lock", asyncio.Lock())
 
             async with scrape_lock:
-                # Add a random delay before starting the scrape.
-                # If two teams start exactly together, the second one will wait for the first to finish.
-                # When the first finishes, the second one wakes up and waits 1-3 secs before hitting the API.
-                await asyncio.sleep(random.uniform(1.0, 3.0))
+                # Add a significant random delay to avoid fixed-interval detection (pattern avoidance)
+                await asyncio.sleep(random.uniform(5.0, 30.0))
 
                 async with asyncio.timeout(60):
                     data = await self._async_scrape_data()
                     await self.store.async_save(data)
+                    self._consecutive_failures = 0
                     return data
         except Exception as err:
             # Handle repair logic
@@ -132,16 +157,24 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                     self._issue_created = True
 
-            if isinstance(err, aiohttp.ClientResponseError) and err.status == 429:
-                self._backoff_until = datetime.now() + timedelta(hours=1)
+            if isinstance(err, aiohttp.ClientResponseError) and err.status in [403, 429]:
+                self._consecutive_failures += 1
+                backoff_hours = min(24, self._consecutive_failures * 2)
+                self._backoff_until = datetime.now() + timedelta(hours=backoff_hours)
                 _LOGGER.error(
-                    "Received 429 (Too Many Requests). Backing off for 1 hour"
+                    "Received %s (Blocked). Backing off for %s hours", err.status, backoff_hours
                 )
             elif isinstance(err, (aiohttp.ClientConnectorError, CannotConnect)) or (isinstance(err, UpdateFailed) and ("Connect call failed" in str(err) or "Failed to fetch events page" in str(err))):
-                self._backoff_until = datetime.now() + timedelta(minutes=60)
+                self._consecutive_failures += 1
+                backoff_minutes = min(1440, self._consecutive_failures * 60)
+                self._backoff_until = datetime.now() + timedelta(minutes=backoff_minutes)
                 _LOGGER.error(
-                    "Connection dropped (softban or WAF block). Backing off for 60 minutes"
+                    "Connection dropped or failed. Consecutive failures: %s. Backing off for %s minutes", 
+                    self._consecutive_failures, backoff_minutes
                 )
+            else:
+                # Other errors
+                self._consecutive_failures += 1
 
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
@@ -149,8 +182,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         """Asynchronous scraping logic."""
         if self._session is None or self._session.closed:
             connector = aiohttp.TCPConnector(family=socket.AF_INET)
+            self._headers = get_random_headers(self.teamname)
             self._session = aiohttp.ClientSession(
-                headers=DEFAULT_HEADERS, connector=connector
+                headers=self._headers, connector=connector
             )
             self._logged_in = False
 
@@ -158,16 +192,79 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         team_url = f"https://{teamname_lower}.kadermanager.de"
         events_url = f"{team_url}/events"
         login_url = f"{team_url}/sessions/new"
+        ical_url = f"{team_url}/calendar/ical"
+        events_widget_url = f"{team_url}/calendar/widget_iframe_events"
+        messages_widget_url = f"{team_url}/messages/widget_iframe_messages"
 
         # 1. Login if needed
         if self.username and self.password and not self._logged_in:
             self._logged_in = await self._async_login(login_url)
-            await asyncio.sleep(random.uniform(3.0, 5.0))  # Extra delay after login before fetching events
+            await asyncio.sleep(random.uniform(3.0, 5.0))
 
-        # 2. Fetch main events page and home page (for enrollments)
-        # We fetch them sequentially to be gentler on the API and avoid connection resets
+        # 2. Try fetching data via iCal and Widgets (Safer path)
+        ical_events = await self._async_get_ical_data(ical_url)
+        await asyncio.sleep(random.uniform(2.0, 4.0))
+        widget_html = await self._async_get_url(events_widget_url)
+        await asyncio.sleep(random.uniform(2.0, 4.0))
+        messages_html = await self._async_get_url(messages_widget_url)
+
+        if ical_events:
+            _LOGGER.debug("Using iCal and Widget data for %s events", len(ical_events))
+            enrollment_counts = self._parse_widget_events(widget_html) if widget_html else {}
+            
+            # Combine iCal events with enrollment counts
+            events = []
+            for e in ical_events:
+                # Create a key for matching: Title_DD.MM.
+                # Note: iCal date is YYYY-MM-DD, we need DD.MM.
+                d_parts = e["date"].split("-")
+                date_key = f"{d_parts[2]}.{d_parts[1]}."
+                match_key = f"{e['title']}_{date_key}"
+                
+                e["in_count"] = enrollment_counts.get(match_key)
+                events.append(e)
+            
+            # Limited events
+            limited_events = events[: self.event_limit]
+            
+            # Fetch details if needed
+            detail_tasks = []
+            for event in limited_events:
+                link = event.get("link")
+                event["players"] = {"accepted_players": [], "declined_players": [], "no_response_players": []}
+                event["comments"] = []
+                
+                if (self.fetch_player_info or self.fetch_comments) and link:
+                    # Reuse cache logic
+                    old_events = {ev["link"]: ev for ev in (self.data.get("events") or []) if "link" in ev}
+                    if link in old_events:
+                        old_e = old_events[link]
+                        if old_e.get("in_count") == event.get("in_count"):
+                            event["players"] = old_e.get("players", event["players"])
+                            event["comments"] = old_e.get("comments", event["comments"])
+                            continue
+                    
+                    detail_tasks.append(self._async_fetch_event_details(event, link))
+
+            if detail_tasks:
+                semaphore = asyncio.Semaphore(1)
+                async def sem_task(task):
+                    async with semaphore:
+                        await task
+                        await asyncio.sleep(random.uniform(3.0, 8.0))
+                await asyncio.gather(*(sem_task(task) for task in detail_tasks))
+
+            data = {"events": limited_events}
+            if self.fetch_comments and messages_html:
+                data["general_comments"] = self.parse_general_comments(messages_html)
+            
+            self.last_success = datetime.now()
+            return data
+
+        # 3. Fallback to full scraping if iCal failed
+        _LOGGER.debug("iCal fetch failed or empty, falling back to full scraping")
         events_page = await self._async_get_url(events_url)
-        await asyncio.sleep(random.uniform(1.5, 3.0))  # Significant random jitter
+        await asyncio.sleep(random.uniform(2.5, 6.0))
         home_page = await self._async_get_url(team_url)
 
         if not events_page:
@@ -232,7 +329,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             async def sem_task(task):
                 async with semaphore:
                     await task
-                    await asyncio.sleep(random.uniform(1.5, 3.5))  # Large random jitter between requests
+                    await asyncio.sleep(random.uniform(3.0, 8.0))  # Significant random jitter between requests
 
             await asyncio.gather(*(sem_task(task) for task in detail_tasks))
 
@@ -248,6 +345,76 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             self._issue_created = False
 
         return data
+
+    async def _async_get_ical_data(self, url: str) -> List[Dict[str, Any]]:
+        """Fetch and parse iCal data."""
+        content = await self._async_get_url(url)
+        if not content:
+            return []
+
+        events = []
+        current_event = {}
+        # Unfold lines (iCal lines starting with space are continuations)
+        lines = content.replace("\r\n ", "").replace("\n ", "").splitlines()
+        
+        for line in lines:
+            if line == "BEGIN:VEVENT":
+                current_event = {}
+            elif line == "END:VEVENT":
+                if "SUMMARY" in current_event and "DTSTART" in current_event:
+                    events.append(current_event)
+            elif ":" in line:
+                key_part, value = line.split(":", 1)
+                key = key_part.split(";")[0]
+                # Unescape some common chars
+                value = value.replace("\\,", ",").replace("\\;", ";").replace("\\n", "\n")
+                current_event[key] = value
+
+        parsed_events = []
+        for e in events:
+            # Parse DTSTART (e.g. 20260623T193000Z or 20260623)
+            dt_str = e.get("DTSTART", "")
+            try:
+                if "T" in dt_str:
+                    dt = datetime.strptime(dt_str[:15], "%Y%m%dT%H%M%S")
+                else:
+                    dt = datetime.strptime(dt_str[:8], "%Y%m%d")
+                
+                parsed_events.append({
+                    "title": e.get("SUMMARY", "Unknown"),
+                    "link": e.get("URL", ""),
+                    "location": e.get("LOCATION", "Unknown"),
+                    "type": e.get("CATEGORIES", "Unknown"),
+                    "date": dt.strftime("%Y-%m-%d"),
+                    "time": dt.strftime("%H:%M") if "T" in dt_str else "Unknown",
+                    "original_date": dt.strftime("%d.%m.%Y %H:%M"),
+                })
+            except Exception:
+                continue
+
+        return parsed_events
+
+    def _parse_widget_events(self, html: str) -> Dict[str, int]:
+        """Parse enrollment counts from the events widget."""
+        soup = BeautifulSoup(html, "html.parser")
+        counts = {}
+        event_divs = soup.find_all("div", class_="event")
+        for div in event_divs:
+            title_elem = div.find("div", class_="what")
+            date_elem = div.find("span", class_="date")
+            count_elem = div.find("span", class_="enrolled_in")
+            
+            if title_elem and date_elem and count_elem:
+                title = title_elem.text.strip()
+                # Extract DD.MM from date_elem (e.g. "Di 23.06.")
+                date_match = re.search(r"(\d{2}\.\d{2}\.)", date_elem.text)
+                if date_match:
+                    date_key = date_match.group(1)
+                    # Extract count from "(Teilnehmer: 5)"
+                    count_match = re.search(r"(\d+)", count_elem.text)
+                    if count_match:
+                        counts[f"{title}_{date_key}"] = int(count_match.group(1))
+        return counts
 
     async def async_close(self):
         """Close the session."""
@@ -329,9 +496,13 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         """Fetch URL content."""
         try:
             assert self._session is not None
-            # Update referer for each request to look more natural
-            headers = {**DEFAULT_HEADERS, "Referer": f"https://{self.teamname.lower()}.kadermanager.de/"}
-            async with self._session.get(url, timeout=REQUEST_TIMEOUT, headers=headers) as resp:
+            # Use stored headers but update Referer if needed (though it's usually static enough)
+            async with self._session.get(url, timeout=REQUEST_TIMEOUT) as resp:
+                if "sessions/new" in str(resp.url) and "sessions/new" not in url:
+                    _LOGGER.debug("Redirected to login page, session likely expired or unauthorized")
+                    self._logged_in = False
+                    return None
+
                 if resp.status == 429:
                     _LOGGER.error("Rate limit hit (429) for %s", url)
                     raise aiohttp.ClientResponseError(
@@ -602,9 +773,10 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
     username = data.get(CONF_USERNAME)
     password = data.get(CONF_PASSWORD)
 
+    headers = get_random_headers(teamname)
     connector = aiohttp.TCPConnector(family=socket.AF_INET)
     async with aiohttp.ClientSession(
-        headers=DEFAULT_HEADERS, connector=connector
+        headers=headers, connector=connector
     ) as session:
         main_url = f"https://{teamname}.kadermanager.de"
 

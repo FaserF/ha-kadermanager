@@ -56,3 +56,4 @@ venv.bak/
 # IDEs
 .vscode/
 .idea/
+/scratch

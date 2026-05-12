@@ -57,7 +57,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required(
                         CONF_UPDATE_INTERVAL,
                         default=__get_option(CONF_UPDATE_INTERVAL, 60),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=15, max=1440)),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=60, max=1440)),
                     vol.Required(
                         CONF_EVENT_LIMIT, default=__get_option(CONF_EVENT_LIMIT, 3)
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
@@ -108,7 +108,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore
                 vol.Optional(CONF_USERNAME): str,
                 vol.Optional(CONF_PASSWORD): str,
                 vol.Required(CONF_UPDATE_INTERVAL, default=60): vol.All(
-                    vol.Coerce(int), vol.Range(min=15, max=1440)
+                    vol.Coerce(int), vol.Range(min=60, max=1440)
                 ),
                 vol.Required(CONF_EVENT_LIMIT, default=3): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=10)
