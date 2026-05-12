@@ -127,11 +127,26 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from API endpoint."""
+        # Check if we should skip this update due to active back-off
         if self._backoff_until and dt_util.now() < self._backoff_until:
             _LOGGER.debug(
                 "Skipping update due to active back-off until %s", self._backoff_until
             )
             return self.data
+
+        # Restart-resistance: Skip update if the last successful scrape was too recent
+        # (e.g. after a HA restart), unless it's a forced update.
+        if not self._force_update and self.last_success:
+            time_since_last = dt_util.now() - self.last_success
+            # We use a 15-minute buffer to ensure we don't skip when it's actually time
+            if time_since_last < (self.update_interval - timedelta(minutes=15)):
+                _LOGGER.info(
+                    "Skipping scrape for %s: Last successful update was only %s minutes ago. Respecting update interval of %s minutes.",
+                    self.teamname,
+                    int(time_since_last.total_seconds() / 60),
+                    int(self.update_interval.total_seconds() / 60),
+                )
+                return self.data
 
         try:
             # Get or create a domain-wide lock to prevent multiple Kadermanager entries
@@ -140,8 +155,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             scrape_lock = domain_data.setdefault("scrape_lock", asyncio.Lock())
 
             async with scrape_lock:
-                # Add a significant random delay to avoid fixed-interval detection (pattern avoidance)
-                # Bypass if it's a forced update from the UI
+                # Add a significant random delay to avoid fixed-interval detection
                 if not self._force_update:
                     _LOGGER.debug("Waiting for random jitter delay (5-30s)")
                     await asyncio.sleep(random.uniform(5.0, 30.0))
@@ -151,6 +165,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
                 async with asyncio.timeout(60):
                     data = await self._async_scrape_data()
+                    self.last_success = dt_util.now()
+                    # Persist the success time to avoid aggressive scraping after restarts
+                    data["last_success"] = self.last_success.isoformat()
                     await self.store.async_save(data)
                     self._consecutive_failures = 0
                     return data
@@ -477,8 +494,12 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         if cache:
             _LOGGER.debug("Loaded cached data for %s", self.teamname)
             self.data = cache
-            # Try to restore last success time if possible (not strictly needed but good)
-            # For now we just use the data.
+            # Restore last success time to ensure restart-resistance
+            if "last_success" in cache:
+                try:
+                    self.last_success = dt_util.parse_datetime(cache["last_success"])
+                except (ValueError, TypeError):
+                    self.last_success = None
 
     async def _async_login(self, login_url: str) -> bool:
         """Perform login and update session cookies."""
