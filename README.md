@@ -9,17 +9,26 @@ The `kadermanager` integration retrieves event and participant information from 
 
 ## Features ✨
 
+- **Smart Dynamic Interval**: Intelligently scales update frequency based on event proximity (e.g. 30min during games, 12h when idle) to maximize data freshness while protecting your IP.
+- **Force Update**: Manual override to bypass all back-offs and jitter for an immediate refresh.
 - **Event Tracking**: See upcoming games/trainings, dates, and locations.
 - **Participation Stats**: Monitor how many people accepted or declined.
 - **Comments**: View latest comments on events.
 - **Modern Communication**: Uses asynchronous `aiohttp` and browsers-like headers to blend in and avoid blocking.
 - **Persistent Sessions**: Maintains login state across updates to minimize redundant authentication.
 - **Persistence & Survival**: Caches data locally to survive Home Assistant restarts and temporary IP bans.
-- **Bot Protection**: Implements automated back-off, randomized jitter, and rotated User-Agents to stay below request limits and mimic human behavior.
+- **Bot Protection**: Implements automated back-off, randomized jitter, and rotated User-Agents to mimic human behavior.
 - **Self-Repair**: Automatically detects persistent failures (>24h) and creates a generic Repair issue in Home Assistant.
 
+> [!TIP]
+> **Smart Dynamic Interval Logic**:
+> - **Active Phase**: During and up to 3h after event start -> **30 min** updates (catches live updates & comments).
+> - **Recap Phase**: 3h to 6h after event start -> **2h** updates.
+> - **Proximity Phase**: Within 24h before event -> **60 min** updates.
+> - **Idle Phase**: Otherwise -> **12h** updates.
+
 > [!WARNING]
-> **Softbans & Scraping Policy**: Since this integration uses web scraping, it is subject to the website's anti-bot measures. To ensure long-term stability and avoid permanent IP bans, the minimum update interval is enforced at **60 minutes**. Frequent requests (under 60 min) significantly increase the risk of being softbanned by the Kadermanager firewall.
+> **Softbans & Scraping Policy**: Since this integration uses web scraping, it is subject to the website's anti-bot measures. To ensure long-term stability and avoid permanent IP bans, the minimum update interval is generally enforced at **60 minutes** unless using the Smart Interval feature or manual Force Update.
 
 ## Installation 🛠️
 
@@ -52,7 +61,7 @@ This integration works as a **Custom Repository** in HACS.
 ### Configuration Variables
 - **Team Name**: Your subdomain (e.g., `teamname` for `teamname.kadermanager.de`).
 - **Username/Password**: (Optional) Providing credentials allows the integration to log in and fetch non-public events/details.
-- **Additional Settings**: Refresh interval, event limits, comment fetching.
+- **Additional Settings**: Smart update interval, manual force update, event limits, comment fetching.
 
 ## Sensor Attributes
 The data is being refreshed every 60 minutes by default.
