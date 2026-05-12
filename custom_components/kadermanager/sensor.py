@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, cast
 
 from homeassistant import config_entries
 from homeassistant.components.sensor import SensorEntity
@@ -49,13 +49,16 @@ class KadermanagerSensor(CoordinatorEntity, SensorEntity):
         return "mdi:volleyball"
 
     @property
-    def state(self) -> Optional[str]:
-        if not self.coordinator.data:
-            if self.coordinator.last_success:
+    def native_value(self) -> Optional[str]:
+        coordinator: KadermanagerDataUpdateCoordinator = cast(
+            KadermanagerDataUpdateCoordinator, self.coordinator
+        )
+        if not coordinator.data:
+            if coordinator.last_success:
                 return "No events found"
             return "Initializing..."
 
-        events = self.coordinator.data.get("events")
+        events = coordinator.data.get("events")
         if not events:
             return "No events found"
 

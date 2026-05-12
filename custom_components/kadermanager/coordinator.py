@@ -87,6 +87,15 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
     def __init__(self, hass: HomeAssistant, entry: config_entries.ConfigEntry):
         """Initialize."""
+        super().__init__(
+            hass,
+            _LOGGER,
+            name=DOMAIN,
+            update_interval=timedelta(
+                minutes=max(60, entry.options.get(CONF_UPDATE_INTERVAL, 60))
+            ),
+        )
+        self.hass = hass
         config = {**entry.data, **entry.options}
         self.config_entry = entry
         self.teamname = config[CONF_TEAM_NAME]
@@ -97,7 +106,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         self.fetch_comments = config.get(CONF_FETCH_COMMENTS, False)
         self._force_update = entry.options.get(CONF_FORCE_UPDATE, False)
 
-        self.store = storage.Store(hass, 1, f"{DOMAIN}_{self.teamname}")
+        self.store: storage.Store = storage.Store(hass, 1, f"{DOMAIN}_{self.teamname}")
 
         self.last_success: Optional[datetime] = None
         self._issue_created = False
@@ -128,7 +137,12 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Fetch data from API endpoint."""
         # Check if we should skip this update due to active back-off
-        if self._backoff_until and dt_util.now() < self._backoff_until:
+        # Bypass if it's a forced update from the UI
+        if (
+            not self._force_update
+            and self._backoff_until
+            and dt_util.now() < self._backoff_until
+        ):
             _LOGGER.debug(
                 "Skipping update due to active back-off until %s", self._backoff_until
             )
@@ -188,10 +202,8 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                     self._issue_created = True
 
-            if (
-                isinstance(err, aiohttp.ClientResponseError)
-                or getattr(err, "status", None) in [403, 429]
-            ) and getattr(err, "status", None) in [403, 429]:
+            status = getattr(err, "status", None)
+            if status in [403, 429]:
                 self._consecutive_failures += 1
                 backoff_hours = min(24, self._consecutive_failures * 2)
                 self._backoff_until = dt_util.now() + timedelta(hours=backoff_hours)
@@ -263,15 +275,46 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Combine iCal events with enrollment counts
             events = []
+            now = dt_util.now()
+            today_str = now.strftime("%Y-%m-%d")
+
             for e in ical_events:
+                if not e.get("date"):
+                    continue
+
                 # Create a key for matching: Title_DD.MM.
-                # Note: iCal date is YYYY-MM-DD, we need DD.MM.
                 d_parts = e["date"].split("-")
                 date_key = f"{d_parts[2]}.{d_parts[1]}."
                 match_key = f"{e['title']}_{date_key}"
 
                 e["in_count"] = enrollment_counts.get(match_key)
+
+                # Check if event is in the past
+                # If time is unknown, we assume it's an all-day event and keep it for the whole day
+                event_time = e.get("time", "23:59")
+                if event_time == "Unknown":
+                    event_time = "23:59"
+
+                try:
+                    # Construct aware datetime for comparison
+                    if event_time != "23:59":
+                        event_dt = dt_util.parse_datetime(f"{e['date']} {event_time}")
+                    else:
+                        event_dt = dt_util.parse_datetime(f"{e['date']} 23:59:59")
+
+                    if event_dt and event_dt + timedelta(hours=1) < now:
+                        _LOGGER.debug(
+                            "Skipping past event: %s on %s", e["title"], e["date"]
+                        )
+                        continue
+                except (ValueError, TypeError):
+                    if e["date"] < today_str:
+                        continue
+
                 events.append(e)
+
+            # Sort events chronologically
+            events.sort(key=lambda x: (x["date"], x.get("time", "00:00")))
 
             # Limited events
             limited_events = events[: self.event_limit]
@@ -340,8 +383,42 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                     "Failed to fetch events page (maybe IP blocked or session expired)"
                 )
 
-        # 3. Parse events
-        events = self.parse_events(events_page, home_page, team_url)
+        # 3. Parse and filter events
+        all_parsed_events = self.parse_events(events_page, home_page, team_url)
+
+        events = []
+        now = dt_util.now()
+        today_str = now.strftime("%Y-%m-%d")
+
+        for e in all_parsed_events:
+            if not e.get("date"):
+                continue
+
+            # Check if event is in the past
+            event_time = e.get("time", "23:59")
+            if not event_time or event_time == "Unknown":
+                event_time = "23:59"
+
+            try:
+                # Construct aware datetime for comparison
+                if event_time != "23:59":
+                    event_dt = dt_util.parse_datetime(f"{e['date']} {event_time}")
+                else:
+                    event_dt = dt_util.parse_datetime(f"{e['date']} 23:59:59")
+
+                if event_dt and event_dt + timedelta(hours=1) < now:
+                    _LOGGER.debug(
+                        "Skipping past event: %s on %s", e["title"], e["date"]
+                    )
+                    continue
+            except (ValueError, TypeError):
+                if e["date"] < today_str:
+                    continue
+
+            events.append(e)
+
+        # Sort events chronologically
+        events.sort(key=lambda x: (x["date"], x.get("time", "00:00")))
         limited_events = events[: self.event_limit]
 
         # 4. Fetch details for each event (Players & Comments)
@@ -416,7 +493,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             return []
 
         events = []
-        current_event = {}
+        current_event: Dict[str, Any] = {}
         # Unfold lines (iCal lines starting with space are continuations)
         lines = content.replace("\r\n ", "").replace("\n ", "").splitlines()
 
@@ -442,6 +519,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             try:
                 if "T" in dt_str:
                     dt = datetime.strptime(dt_str[:15], "%Y%m%dT%H%M%S")
+                    if dt_str.endswith("Z"):
+                        dt = dt.replace(tzinfo=dt_util.UTC)
+                        dt = dt_util.as_local(dt)
                 else:
                     dt = datetime.strptime(dt_str[:8], "%Y%m%d")
 
@@ -768,8 +848,16 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 comments.append({"author": author, "text": text_elem.text.strip()})
         return comments
 
-    def parse_date_string(self, date_str: str) -> tuple[str, str]:
+    def parse_date_string(self, date_str: str) -> tuple[Optional[str], Optional[str]]:
         """Convert German relative/absolute date string to ISO."""
+        # Handle "07.04.2026 17:30" format directly if present
+        date_time_match = re.search(
+            r"(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}:\d{2})", date_str
+        )
+        if date_time_match:
+            d, m, y, t = date_time_match.groups()
+            return f"{y}-{m.zfill(2)}-{d.zfill(2)}", t
+
         parts = date_str.split(" um ")
         date_part = parts[0]
         time_part = parts[1] if len(parts) > 1 else "Unknown"
@@ -782,9 +870,20 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         elif "Morgen" in date_part:
             target_date = today + timedelta(days=1)
         else:
-            # Handle formats like "10.04.", "10. April", "Fr 10.04."
+            # Handle formats like "10.04.", "10. April", "Fr 10.04.", "07.04.2026"
             details = date_part.replace(",", "").split()
-            day_str = details[-1].strip() if details else ""
+            if not details:
+                return None, None
+
+            # Search for something that looks like a date (contains dots)
+            day_str = ""
+            for detail in details:
+                if "." in detail:
+                    day_str = detail
+                    break
+
+            if not day_str:
+                day_str = details[-1]  # Fallback to last element
 
             # Remove trailing dots
             if day_str.endswith("."):
@@ -819,12 +918,16 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
             try:
                 if "." in day_str:
-                    # Format: 10.04.
+                    # Format: 10.04. or 10.04.2026
                     d_parts = day_str.split(".")
                     if len(d_parts) >= 2:
-                        day = d_parts[0]
-                        month = d_parts[1]
-                        year = d_parts[2] if len(d_parts) > 2 else str(today.year)
+                        day = d_parts[0].zfill(2)
+                        month = d_parts[1].zfill(2)
+                        year = (
+                            d_parts[2]
+                            if len(d_parts) > 2 and len(d_parts[2]) == 4
+                            else str(today.year)
+                        )
                         target_date = datetime.strptime(
                             f"{day}.{month}.{year}", "%d.%m.%Y"
                         )
