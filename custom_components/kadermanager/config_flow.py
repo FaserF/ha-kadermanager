@@ -11,6 +11,7 @@ from .const import (
     CONF_FETCH_COMMENTS,
     CONF_FETCH_PLAYER_INFO,
     CONF_FORCE_UPDATE,
+    CONF_DYNAMIC_INTERVAL,
     CONF_PASSWORD,
     CONF_TEAM_NAME,
     CONF_UPDATE_INTERVAL,
@@ -87,6 +88,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_FORCE_UPDATE,
                         default=False,
                     ): bool,
+                    vol.Optional(
+                        CONF_DYNAMIC_INTERVAL,
+                        default=__get_option(CONF_DYNAMIC_INTERVAL, False),
+                    ): bool,
                 },
             ),
         )
@@ -133,6 +138,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore
                 ),
                 vol.Required(CONF_FETCH_PLAYER_INFO, default=True): bool,
                 vol.Required(CONF_FETCH_COMMENTS, default=True): bool,
+                vol.Optional(CONF_DYNAMIC_INTERVAL, default=False): bool,
             },
         )
 

@@ -12,7 +12,8 @@
           "fetch_player_info": "Fetch player informations like attendees, people who declined the event",
           "fetch_comments": "Fetch comments for events",
           "update_interval": "Update Interval (minutes)",
-          "force_update": "Force update now (once)"
+          "force_update": "Force update now (once)",
+          "dynamic_interval": "Smart dynamic interval (Frequent updates during/after events, otherwise rare)"
         }
       }
     }
@@ -29,7 +30,8 @@
           "event_limit": "Limit of events being fetched",
           "fetch_player_info": "Fetch player informations like attendees, people who declined the event",
           "fetch_comments": "Fetch comments for events",
-          "update_interval": "Update Interval (minutes)"
+          "update_interval": "Update Interval (minutes)",
+          "dynamic_interval": "Smart dynamic interval (Frequent updates during/after events, otherwise rare)"
         }
       }
     },

@@ -26,6 +26,7 @@ from .const import (
     CONF_FETCH_PLAYER_INFO,
     CONF_FETCH_COMMENTS,
     CONF_FORCE_UPDATE,
+    CONF_DYNAMIC_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,6 +85,8 @@ class InvalidAuth(Exception):
 
 class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching Kadermanager data."""
+
+    config_entry: config_entries.ConfigEntry
 
     def __init__(self, hass: HomeAssistant, entry: config_entries.ConfigEntry):
         """Initialize."""
@@ -184,6 +187,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                     data["last_success"] = self.last_success.isoformat()
                     await self.store.async_save(data)
                     self._consecutive_failures = 0
+                    self._update_dynamic_interval(data)
                     return data
         except Exception as err:
             # Handle repair logic
@@ -236,6 +240,71 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 self._consecutive_failures += 1
 
             raise UpdateFailed(f"Error communicating with API: {err}") from err
+
+    def _update_dynamic_interval(self, data: Dict[str, Any]) -> None:
+        """Update the update interval dynamically based on upcoming and recent events."""
+        if not self.config_entry.options.get(CONF_DYNAMIC_INTERVAL):
+            # Fallback to configured fixed interval
+            self.update_interval = timedelta(
+                minutes=max(60, self.config_entry.options.get(CONF_UPDATE_INTERVAL, 60))
+            )
+            return
+
+        events = data.get("events", [])
+        now = dt_util.now()
+
+        # Default to 12 hours
+        min_interval = timedelta(hours=12)
+        interval_reason = "No active or upcoming events"
+
+        for event in events:
+            try:
+                event_date = event.get("date")
+                event_time = event.get("time")
+
+                if not event_date:
+                    continue
+
+                if not event_time or event_time == "Unknown":
+                    event_time = "00:00"
+
+                edt = dt_util.parse_datetime(f"{event_date} {event_time}")
+                if edt:
+                    if edt.tzinfo is None:
+                        edt = dt_util.as_local(edt)
+
+                    time_diff = edt - now
+
+                    # 1. ACTIVE PHASE: During or shortly after (up to 3 hours after start)
+                    # Use 30 minutes to catch late comments or attendance changes during the event
+                    if timedelta(hours=-3) <= time_diff <= timedelta(0):
+                        if min_interval > timedelta(minutes=30):
+                            min_interval = timedelta(minutes=30)
+                            interval_reason = f"Event '{event.get('title')}' is active (started {edt})"
+
+                    # 2. RECAP PHASE: 3 to 6 hours after start
+                    # Use 2 hours for post-event summary/comments
+                    elif timedelta(hours=-6) < time_diff < timedelta(hours=-3):
+                        if min_interval > timedelta(hours=2):
+                            min_interval = timedelta(hours=2)
+                            interval_reason = f"Event '{event.get('title')}' finished recently (started {edt})"
+
+                    # 3. PROXIMITY PHASE: Within 24 hours before start
+                    # Use 60 minutes
+                    elif timedelta(0) < time_diff <= timedelta(hours=24):
+                        if min_interval > timedelta(hours=1):
+                            min_interval = timedelta(hours=1)
+                            interval_reason = f"Event '{event.get('title')}' is upcoming (starts {edt})"
+
+            except (ValueError, TypeError):
+                continue
+
+        self.update_interval = min_interval
+        _LOGGER.info(
+            "Dynamic interval set to %s. Reason: %s",
+            self.update_interval,
+            interval_reason,
+        )
 
     async def _async_scrape_data(self) -> Dict[str, Any]:
         """Asynchronous scraping logic."""
