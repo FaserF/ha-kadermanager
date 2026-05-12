@@ -7,13 +7,16 @@ from custom_components.kadermanager.coordinator import KadermanagerDataUpdateCoo
 @pytest.fixture
 def coordinator():
     hass = MagicMock()
-    config = {
+    entry = MagicMock()
+    entry.data = {
         "teamname": "testteam",
         "username": "user",
         "password": "pass",
+    }
+    entry.options = {
         "update_interval": 30,
     }
-    return KadermanagerDataUpdateCoordinator(hass, config)
+    return KadermanagerDataUpdateCoordinator(hass, entry)
 
 
 def test_parse_date_string(coordinator):

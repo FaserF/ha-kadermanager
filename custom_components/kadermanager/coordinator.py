@@ -4,12 +4,14 @@ import socket
 import random
 
 from datetime import datetime, timedelta
+from homeassistant.util import dt as dt_util
 from typing import Any, Dict, List, Optional
 import re
 from bs4 import BeautifulSoup
 import aiohttp
 from urllib.parse import urljoin
 
+from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers import issue_registry as ir, storage
@@ -23,6 +25,7 @@ from .const import (
     CONF_EVENT_LIMIT,
     CONF_FETCH_PLAYER_INFO,
     CONF_FETCH_COMMENTS,
+    CONF_FORCE_UPDATE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,6 +42,7 @@ USER_AGENTS = [
 REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 ISSUE_ID_CONNECTION = "connection_error"
+
 
 def get_random_headers(teamname: str) -> Dict[str, str]:
     """Generate random headers to mimic a real browser."""
@@ -58,15 +62,16 @@ def get_random_headers(teamname: str) -> Dict[str, str]:
         "Cache-Control": "max-age=0",
         "Referer": f"https://{teamname.lower()}.kadermanager.de/",
     }
-    
+
     # Add Sec-CH-UA headers for Chrome-based browsers
     if "Chrome" in ua:
-        headers["Sec-CH-UA"] = '"Google Chrome";v="148", "Chromium";v="148", "Not=A?Brand";v="99"'
+        headers["Sec-CH-UA"] = (
+            '"Google Chrome";v="148", "Chromium";v="148", "Not=A?Brand";v="99"'
+        )
         headers["Sec-CH-UA-Mobile"] = "?0"
         headers["Sec-CH-UA-Platform"] = '"Windows"' if "Windows" in ua else '"macOS"'
-        
-    return headers
 
+    return headers
 
 
 class CannotConnect(Exception):
@@ -80,18 +85,21 @@ class InvalidAuth(Exception):
 class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching Kadermanager data."""
 
-    def __init__(self, hass: HomeAssistant, config: Dict[str, Any]):
+    def __init__(self, hass: HomeAssistant, entry: config_entries.ConfigEntry):
         """Initialize."""
+        config = {**entry.data, **entry.options}
+        self.config_entry = entry
         self.teamname = config[CONF_TEAM_NAME]
         self.username = config.get(CONF_USERNAME)
         self.password = config.get(CONF_PASSWORD)
         self.event_limit = config.get(CONF_EVENT_LIMIT, 5)
         self.fetch_player_info = config.get(CONF_FETCH_PLAYER_INFO, False)
         self.fetch_comments = config.get(CONF_FETCH_COMMENTS, False)
+        self._force_update = entry.options.get(CONF_FORCE_UPDATE, False)
 
         self.store = storage.Store(hass, 1, f"{DOMAIN}_{self.teamname}")
 
-        self.last_success: Optional[datetime] = datetime.now()
+        self.last_success: Optional[datetime] = None
         self._issue_created = False
         self._session: Optional[aiohttp.ClientSession] = None
         self._logged_in = False
@@ -119,7 +127,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from API endpoint."""
-        if self._backoff_until and datetime.now() < self._backoff_until:
+        if self._backoff_until and dt_util.now() < self._backoff_until:
             _LOGGER.debug(
                 "Skipping update due to active back-off until %s", self._backoff_until
             )
@@ -133,7 +141,13 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
             async with scrape_lock:
                 # Add a significant random delay to avoid fixed-interval detection (pattern avoidance)
-                await asyncio.sleep(random.uniform(5.0, 30.0))
+                # Bypass if it's a forced update from the UI
+                if not self._force_update:
+                    _LOGGER.debug("Waiting for random jitter delay (5-30s)")
+                    await asyncio.sleep(random.uniform(5.0, 30.0))
+                else:
+                    _LOGGER.info("Force update triggered, bypassing jitter delay")
+                    self._force_update = False  # Reset for next regular update
 
                 async with asyncio.timeout(60):
                     data = await self._async_scrape_data()
@@ -142,7 +156,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                     return data
         except Exception as err:
             # Handle repair logic
-            if self.last_success and (datetime.now() - self.last_success) > timedelta(
+            if self.last_success and (dt_util.now() - self.last_success) > timedelta(
                 hours=24
             ):
                 if not self._issue_created:
@@ -157,20 +171,36 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                     self._issue_created = True
 
-            if isinstance(err, aiohttp.ClientResponseError) and err.status in [403, 429]:
+            if (
+                isinstance(err, aiohttp.ClientResponseError)
+                or getattr(err, "status", None) in [403, 429]
+            ) and getattr(err, "status", None) in [403, 429]:
                 self._consecutive_failures += 1
                 backoff_hours = min(24, self._consecutive_failures * 2)
-                self._backoff_until = datetime.now() + timedelta(hours=backoff_hours)
+                self._backoff_until = dt_util.now() + timedelta(hours=backoff_hours)
                 _LOGGER.error(
-                    "Received %s (Blocked). Backing off for %s hours", err.status, backoff_hours
+                    "Received %s (Blocked). Backing off for %s hours",
+                    getattr(err, "status", "unknown"),
+                    backoff_hours,
                 )
-            elif isinstance(err, (aiohttp.ClientConnectorError, CannotConnect)) or (isinstance(err, UpdateFailed) and ("Connect call failed" in str(err) or "Failed to fetch events page" in str(err))):
+            elif (
+                isinstance(err, (aiohttp.ClientConnectorError, CannotConnect))
+                or "ClientConnectorError" in str(type(err))
+                or (
+                    isinstance(err, UpdateFailed)
+                    and (
+                        "Connect call failed" in str(err)
+                        or "Failed to fetch events page" in str(err)
+                    )
+                )
+            ):
                 self._consecutive_failures += 1
                 backoff_minutes = min(1440, self._consecutive_failures * 60)
-                self._backoff_until = datetime.now() + timedelta(minutes=backoff_minutes)
+                self._backoff_until = dt_util.now() + timedelta(minutes=backoff_minutes)
                 _LOGGER.error(
-                    "Connection dropped or failed. Consecutive failures: %s. Backing off for %s minutes", 
-                    self._consecutive_failures, backoff_minutes
+                    "Connection dropped or failed. Consecutive failures: %s. Backing off for %s minutes",
+                    self._consecutive_failures,
+                    backoff_minutes,
                 )
             else:
                 # Other errors
@@ -210,8 +240,10 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
         if ical_events:
             _LOGGER.debug("Using iCal and Widget data for %s events", len(ical_events))
-            enrollment_counts = self._parse_widget_events(widget_html) if widget_html else {}
-            
+            enrollment_counts = (
+                self._parse_widget_events(widget_html) if widget_html else {}
+            )
+
             # Combine iCal events with enrollment counts
             events = []
             for e in ical_events:
@@ -220,45 +252,55 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 d_parts = e["date"].split("-")
                 date_key = f"{d_parts[2]}.{d_parts[1]}."
                 match_key = f"{e['title']}_{date_key}"
-                
+
                 e["in_count"] = enrollment_counts.get(match_key)
                 events.append(e)
-            
+
             # Limited events
             limited_events = events[: self.event_limit]
-            
+
             # Fetch details if needed
             detail_tasks = []
             for event in limited_events:
                 link = event.get("link")
-                event["players"] = {"accepted_players": [], "declined_players": [], "no_response_players": []}
+                event["players"] = {
+                    "accepted_players": [],
+                    "declined_players": [],
+                    "no_response_players": [],
+                }
                 event["comments"] = []
-                
+
                 if (self.fetch_player_info or self.fetch_comments) and link:
                     # Reuse cache logic
-                    old_events = {ev["link"]: ev for ev in (self.data.get("events") or []) if "link" in ev}
+                    old_events = {
+                        ev["link"]: ev
+                        for ev in ((self.data or {}).get("events") or [])
+                        if "link" in ev
+                    }
                     if link in old_events:
                         old_e = old_events[link]
                         if old_e.get("in_count") == event.get("in_count"):
                             event["players"] = old_e.get("players", event["players"])
                             event["comments"] = old_e.get("comments", event["comments"])
                             continue
-                    
+
                     detail_tasks.append(self._async_fetch_event_details(event, link))
 
             if detail_tasks:
                 semaphore = asyncio.Semaphore(1)
+
                 async def sem_task(task):
                     async with semaphore:
                         await task
                         await asyncio.sleep(random.uniform(3.0, 8.0))
+
                 await asyncio.gather(*(sem_task(task) for task in detail_tasks))
 
             data = {"events": limited_events}
             if self.fetch_comments and messages_html:
                 data["general_comments"] = self.parse_general_comments(messages_html)
-            
-            self.last_success = datetime.now()
+
+            self.last_success = dt_util.now()
             return data
 
         # 3. Fallback to full scraping if iCal failed
@@ -277,7 +319,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 events_page = await self._async_get_url(events_url)
 
             if not events_page:
-                raise UpdateFailed("Failed to fetch events page (maybe IP blocked or session expired)")
+                raise UpdateFailed(
+                    "Failed to fetch events page (maybe IP blocked or session expired)"
+                )
 
         # 3. Parse events
         events = self.parse_events(events_page, home_page, team_url)
@@ -286,7 +330,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         # 4. Fetch details for each event (Players & Comments)
         # Optimization: Only fetch details if basic info changed or data missing
         old_events = {
-            e["link"]: e for e in (self.data.get("events") or []) if "link" in e
+            e["link"]: e for e in ((self.data or {}).get("events") or []) if "link" in e
         }
 
         detail_tasks = []
@@ -329,7 +373,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             async def sem_task(task):
                 async with semaphore:
                     await task
-                    await asyncio.sleep(random.uniform(3.0, 8.0))  # Significant random jitter between requests
+                    await asyncio.sleep(
+                        random.uniform(3.0, 8.0)
+                    )  # Significant random jitter between requests
 
             await asyncio.gather(*(sem_task(task) for task in detail_tasks))
 
@@ -339,7 +385,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             data["general_comments"] = self.parse_general_comments(home_page)
 
         # Update success state
-        self.last_success = datetime.now()
+        self.last_success = dt_util.now()
         if self._issue_created:
             ir.async_delete_issue(self.hass, DOMAIN, ISSUE_ID_CONNECTION)
             self._issue_created = False
@@ -356,7 +402,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         current_event = {}
         # Unfold lines (iCal lines starting with space are continuations)
         lines = content.replace("\r\n ", "").replace("\n ", "").splitlines()
-        
+
         for line in lines:
             if line == "BEGIN:VEVENT":
                 current_event = {}
@@ -367,7 +413,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 key_part, value = line.split(":", 1)
                 key = key_part.split(";")[0]
                 # Unescape some common chars
-                value = value.replace("\\,", ",").replace("\\;", ";").replace("\\n", "\n")
+                value = (
+                    value.replace("\\,", ",").replace("\\;", ";").replace("\\n", "\n")
+                )
                 current_event[key] = value
 
         parsed_events = []
@@ -379,16 +427,18 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                     dt = datetime.strptime(dt_str[:15], "%Y%m%dT%H%M%S")
                 else:
                     dt = datetime.strptime(dt_str[:8], "%Y%m%d")
-                
-                parsed_events.append({
-                    "title": e.get("SUMMARY", "Unknown"),
-                    "link": e.get("URL", ""),
-                    "location": e.get("LOCATION", "Unknown"),
-                    "type": e.get("CATEGORIES", "Unknown"),
-                    "date": dt.strftime("%Y-%m-%d"),
-                    "time": dt.strftime("%H:%M") if "T" in dt_str else "Unknown",
-                    "original_date": dt.strftime("%d.%m.%Y %H:%M"),
-                })
+
+                parsed_events.append(
+                    {
+                        "title": e.get("SUMMARY", "Unknown"),
+                        "link": e.get("URL", ""),
+                        "location": e.get("LOCATION", "Unknown"),
+                        "type": e.get("CATEGORIES", "Unknown"),
+                        "date": dt.strftime("%Y-%m-%d"),
+                        "time": dt.strftime("%H:%M") if "T" in dt_str else "Unknown",
+                        "original_date": dt.strftime("%d.%m.%Y %H:%M"),
+                    }
+                )
             except Exception:
                 continue
 
@@ -403,7 +453,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             title_elem = div.find("div", class_="what")
             date_elem = div.find("span", class_="date")
             count_elem = div.find("span", class_="enrolled_in")
-            
+
             if title_elem and date_elem and count_elem:
                 title = title_elem.text.strip()
                 # Extract DD.MM from date_elem (e.g. "Di 23.06.")
@@ -499,7 +549,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             # Use stored headers but update Referer if needed (though it's usually static enough)
             async with self._session.get(url, timeout=REQUEST_TIMEOUT) as resp:
                 if "sessions/new" in str(resp.url) and "sessions/new" not in url:
-                    _LOGGER.debug("Redirected to login page, session likely expired or unauthorized")
+                    _LOGGER.debug(
+                        "Redirected to login page, session likely expired or unauthorized"
+                    )
                     self._logged_in = False
                     return None
 
@@ -509,15 +561,22 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                         resp.request_info, resp.history, status=429
                     )
                 if resp.status == 403:
-                    _LOGGER.error("Access forbidden (403) for %s - possibly bot detection or IP ban", url)
+                    _LOGGER.error(
+                        "Access forbidden (403) for %s - possibly bot detection or IP ban",
+                        url,
+                    )
 
                 resp.raise_for_status()
                 return await resp.text()
         except aiohttp.ClientResponseError as e:
-            _LOGGER.error("HTTP error fetching %s: %s (Status: %s)", url, e.message, e.status)
+            _LOGGER.error(
+                "HTTP error fetching %s: %s (Status: %s)", url, e.message, e.status
+            )
             return None
         except aiohttp.ClientConnectorError as e:
-            _LOGGER.error("Connection error fetching %s: %s - possibly softbanned", url, e)
+            _LOGGER.error(
+                "Connection error fetching %s: %s - possibly softbanned", url, e
+            )
             raise CannotConnect(f"Connection failed: {e}") from e
         except Exception as e:
             _LOGGER.error("Failed to fetch %s: %s", url, e)
@@ -554,7 +613,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             home_soup = BeautifulSoup(home_html, "html.parser")
             # The home page usually has "circle-in-enrollments" inside a container that might have a link
             enrollment_divs = home_soup.find_all("div", class_="circle-in-enrollments")
-            for div in enrollment_divs:
+            for idx, div in enumerate(enrollment_divs):
                 try:
                     count = int(div.text.strip())
                     # Look for the closest link to this enrollment circle
@@ -568,6 +627,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                             else raw_href
                         ).split("?")[0]
                         enrollment_map[link_path] = count
+                    else:
+                        # Fallback: store by index string
+                        enrollment_map[f"idx_{idx}"] = count
                 except (ValueError, AttributeError):
                     continue
 
@@ -594,10 +656,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             link_path = "/" + "/".join(link.split("/")[3:]) if "://" in link else link
             if link_path in enrollment_map:
                 in_count = enrollment_map[link_path]
-            # Fallback to index only if we have exactly the same number of items and no links found
-            elif idx < len(enrollment_map) and not enrollment_map:
-                # This is the old behavior as absolute fallback
-                in_count = list(enrollment_map.values())[idx]
+            # Fallback to index if link matching fails
+            elif f"idx_{idx}" in enrollment_map:
+                in_count = enrollment_map[f"idx_{idx}"]
 
             date_elem = container.find("h4")
             raw_date_str = date_elem.text.strip() if date_elem else "Unknown"
@@ -692,7 +753,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         date_part = parts[0]
         time_part = parts[1] if len(parts) > 1 else "Unknown"
 
-        today = datetime.now()
+        today = dt_util.now()
         target_date = today
 
         if "Heute" in date_part:
@@ -775,16 +836,18 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
 
     headers = get_random_headers(teamname)
     connector = aiohttp.TCPConnector(family=socket.AF_INET)
-    async with aiohttp.ClientSession(
-        headers=headers, connector=connector
-    ) as session:
+    async with aiohttp.ClientSession(headers=headers, connector=connector) as session:
         main_url = f"https://{teamname}.kadermanager.de"
 
         try:
-            headers = {**DEFAULT_HEADERS, "Referer": "https://www.kadermanager.de/"}
-            async with session.get(main_url, timeout=REQUEST_TIMEOUT, headers=headers) as resp:
+            headers = {**headers, "Referer": "https://www.kadermanager.de/"}
+            async with session.get(
+                main_url, timeout=REQUEST_TIMEOUT, headers=headers
+            ) as resp:
                 if resp.status == 403:
-                    _LOGGER.error("Access forbidden (403) during validation - possibly IP blocked")
+                    _LOGGER.error(
+                        "Access forbidden (403) during validation - possibly IP blocked"
+                    )
                     raise CannotConnect("IP blocked or access forbidden")
                 resp.raise_for_status()
         except Exception as e:
@@ -797,7 +860,9 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
             login_url = f"{main_url}/sessions/new"
             try:
                 await asyncio.sleep(random.uniform(1.0, 3.0))
-                async with session.get(login_url, timeout=REQUEST_TIMEOUT, headers=headers) as resp:
+                async with session.get(
+                    login_url, timeout=REQUEST_TIMEOUT, headers=headers
+                ) as resp:
                     resp.raise_for_status()
                     html = await resp.text()
 
@@ -806,13 +871,17 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
                 token_val = ""
                 if token_input:
                     t_val = token_input.get("value")
-                    token_val = str(t_val[0] if isinstance(t_val, list) else t_val or "")
+                    token_val = str(
+                        t_val[0] if isinstance(t_val, list) else t_val or ""
+                    )
 
                 if not token_val:
                     token_meta = soup.find("meta", {"name": "csrf-token"})
                     if token_meta:
                         m_val = token_meta.get("content")
-                        token_val = str(m_val[0] if isinstance(m_val, list) else m_val or "")
+                        token_val = str(
+                            m_val[0] if isinstance(m_val, list) else m_val or ""
+                        )
 
                 payload = {
                     "authenticity_token": token_val,
@@ -833,7 +902,10 @@ async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
                 post_headers = {**headers, "Referer": login_url}
                 await asyncio.sleep(random.uniform(1.0, 3.0))
                 async with session.post(
-                    post_url, data=payload, timeout=REQUEST_TIMEOUT, headers=post_headers
+                    post_url,
+                    data=payload,
+                    timeout=REQUEST_TIMEOUT,
+                    headers=post_headers,
                 ) as resp:
                     if resp.status == 200:
                         text = await resp.text()

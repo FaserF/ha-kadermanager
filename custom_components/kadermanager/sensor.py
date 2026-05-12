@@ -50,9 +50,16 @@ class KadermanagerSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def state(self) -> Optional[str]:
-        if not self.coordinator.data or not self.coordinator.data.get("events"):
+        if not self.coordinator.data:
+            if self.coordinator.last_success:
+                return "No events found"
+            return "Initializing..."
+
+        events = self.coordinator.data.get("events")
+        if not events:
             return "No events found"
-        return self.coordinator.data["events"][0]["original_date"]
+
+        return events[0]["original_date"]
 
     @property
     def extra_state_attributes(self):

@@ -15,9 +15,7 @@ async def async_setup_entry(
     """Set up platform from a ConfigEntry."""
     hass.data.setdefault(DOMAIN, {})
 
-    config = {**entry.data, **entry.options}
-
-    coordinator = KadermanagerDataUpdateCoordinator(hass, config)
+    coordinator = KadermanagerDataUpdateCoordinator(hass, entry)
     await coordinator.async_load_cache()
 
     hass.data[DOMAIN][entry.entry_id] = coordinator

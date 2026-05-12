@@ -64,9 +64,9 @@ async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    coordinator: KadermanagerDataUpdateCoordinator | None = (
-        hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    )
+    coordinator: KadermanagerDataUpdateCoordinator | None = hass.data.get(
+        DOMAIN, {}
+    ).get(entry.entry_id)
 
     # ── Environment ──────────────────────────────────────────────────────────
     integration = await async_get_integration(hass, DOMAIN)
@@ -97,9 +97,7 @@ async def async_get_config_entry_diagnostics(
         return diag
 
     last_exception = coordinator.last_exception
-    raw_events: list[dict[str, Any]] = (
-        (coordinator.data or {}).get("events") or []
-    )
+    raw_events: list[dict[str, Any]] = (coordinator.data or {}).get("events") or []
 
     diag["coordinator"] = {
         # Connection health
@@ -111,8 +109,7 @@ async def async_get_config_entry_diagnostics(
         # Session / auth state
         "logged_in": coordinator._logged_in,
         "session_open": (
-            coordinator._session is not None
-            and not coordinator._session.closed
+            coordinator._session is not None and not coordinator._session.closed
         ),
         "backoff_active": coordinator._backoff_until is not None,
         "backoff_until": (

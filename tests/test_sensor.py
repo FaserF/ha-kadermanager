@@ -25,14 +25,17 @@ def mock_html_content():
 @pytest.fixture
 def coordinator_mock():
     hass = MagicMock()
-    config = {
+    entry = MagicMock()
+    entry.data = {
         CONF_TEAM_NAME: "test",
+    }
+    entry.options = {
         CONF_EVENT_LIMIT: 5,
         CONF_FETCH_PLAYER_INFO: True,
         CONF_FETCH_COMMENTS: True,
         CONF_UPDATE_INTERVAL: 60,
     }
-    return KadermanagerDataUpdateCoordinator(hass, config)
+    return KadermanagerDataUpdateCoordinator(hass, entry)
 
 
 def test_parsing_logic(mock_html_content, coordinator_mock):

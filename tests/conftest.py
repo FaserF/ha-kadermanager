@@ -14,6 +14,7 @@ sys.modules["homeassistant.helpers.config_validation"] = MagicMock()
 sys.modules["homeassistant.helpers.entity_platform"] = MagicMock()
 sys.modules["homeassistant.helpers.event"] = MagicMock()
 sys.modules["homeassistant.helpers.typing"] = MagicMock()
+sys.modules["homeassistant.helpers.frame"] = MagicMock()
 
 # Update Coordinator
 update_coordinator_mock = MagicMock()
@@ -46,6 +47,7 @@ sys.modules["homeassistant.util.dt"] = dt_mock
 # Link them
 util_mock.dt = dt_mock
 # Mock DEFAULT_TIME_ZONE
+dt_mock.now.return_value = datetime.datetime(2024, 1, 1, 12, 0, 0)
 dt_mock.DEFAULT_TIME_ZONE = datetime.timezone.utc
 
 sys.modules["homeassistant.config_entries"] = MagicMock()

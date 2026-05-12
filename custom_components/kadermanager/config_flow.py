@@ -10,6 +10,7 @@ from .const import (
     CONF_EVENT_LIMIT,
     CONF_FETCH_COMMENTS,
     CONF_FETCH_PLAYER_INFO,
+    CONF_FORCE_UPDATE,
     CONF_PASSWORD,
     CONF_TEAM_NAME,
     CONF_UPDATE_INTERVAL,
@@ -37,6 +38,19 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             )
 
         if user_input is not None:
+            if user_input.get(CONF_FORCE_UPDATE):
+                # Trigger a force refresh on the existing coordinator
+                if (
+                    DOMAIN in self.hass.data
+                    and self._config_entry.entry_id in self.hass.data[DOMAIN]
+                ):
+                    coordinator = self.hass.data[DOMAIN][self._config_entry.entry_id]
+                    coordinator._force_update = True
+                    self.hass.async_create_task(coordinator.async_request_refresh())
+
+                # Remove it so it doesn't get saved into options permanently
+                user_input.pop(CONF_FORCE_UPDATE)
+
             return self.async_create_entry(
                 title=user_input.get(CONF_TEAM_NAME, ""), data=user_input
             )
@@ -68,6 +82,10 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     vol.Required(
                         CONF_FETCH_COMMENTS,
                         default=__get_option(CONF_FETCH_COMMENTS, True),
+                    ): bool,
+                    vol.Optional(
+                        CONF_FORCE_UPDATE,
+                        default=False,
                     ): bool,
                 },
             ),
