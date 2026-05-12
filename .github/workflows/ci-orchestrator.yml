@@ -39,8 +39,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements_test.txt ]; then pip install -r requirements_test.txt; fi
-          pip install ruff mypy pyyaml pytest pytest-asyncio pytest-cov homeassistant aiohttp beautifulsoup4
+          pip install -r requirements.txt
 
       - name: Validate JSON/YAML
         run: |
