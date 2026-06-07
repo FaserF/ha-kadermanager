@@ -12,7 +12,7 @@
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/faserf/ha-kadermanager/issues",
   "requirements": [
-    "beautifulsoup4==4.14.3"
+    "beautifulsoup4==4.15.0"
   ],
   "version": "1.6.2-dev0"
 }
