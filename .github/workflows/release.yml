@@ -13,6 +13,19 @@ name: Release
           - stable
           - beta
           - nightly
+      bump_level:
+        description: "Bump Level (SemVer only: major, minor, patch)"
+        required: false
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      version_override:
+        description: "Manually override new version (e.g. 1.2.3 or 2026.6.2b1). Leave empty to use automatic calculation."
+        required: false
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-release
@@ -45,6 +58,8 @@ jobs:
         shell: bash
         env:
           RELEASE_TYPE: ${{ inputs.release_type }}
+          BUMP_LEVEL: ${{ inputs.bump_level }}
+          VERSION_OVERRIDE: ${{ inputs.version_override }}
           REPO: ${{ github.repository }}
           OWNER: ${{ github.repository_owner }}
           REPO_NAME: ${{ github.event.repository.name }}
@@ -60,8 +75,7 @@ jobs:
       - name: Prepare Initial Draft Body
         shell: bash
         run: |
-          body=$(cat release_body.md)
-          printf "%s\n\n---\n🔄 **Release Progress**: Version determined. Syncing repository files...\n" "$body" > initial_draft_body.md
+          cp release_body.md initial_draft_body.md
 
       - name: Check and Delete Existing Draft Release
         env:
@@ -79,14 +93,22 @@ jobs:
           fi
 
       - name: Create Initial Draft Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ steps.get_version.outputs.tag }}
-          name: Release ${{ steps.get_version.outputs.version }}
-          body_path: initial_draft_body.md
-          prerelease: ${{ steps.get_version.outputs.is_prerelease == 'true' }}
-          draft: true
-          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.get_version.outputs.tag }}
+          VERSION: ${{ steps.get_version.outputs.version }}
+          IS_PRERELEASE: ${{ steps.get_version.outputs.is_prerelease }}
+        shell: bash
+        run: |
+          prerelease_arg=""
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            prerelease_arg="--prerelease"
+          fi
+          gh release create "$TAG" \
+            --title "Release $VERSION" \
+            --notes-file "initial_draft_body.md" \
+            --draft \
+            $prerelease_arg
 
   sync-version:
     name: Sync Repository Version
@@ -114,11 +136,11 @@ jobs:
       - name: Update Files
         shell: bash
         run: |
-          python .github/scripts/version_manager.py bump --type ${{ inputs.release_type }}
+          python .github/scripts/version_manager.py bump --type ${{ inputs.release_type }} --level ${{ inputs.bump_level }} --override "${{ inputs.version_override }}"
 
       - name: Commit and Push
         run: |
-          git add custom_components/db_infoscreen/manifest.json
+          git add custom_components/kadermanager/manifest.json
           if ! git diff --staged --quiet; then
             git commit -m "chore: release version ${{ needs.versioning.outputs.version }} [skip ci]"
             git push origin HEAD:${{ github.ref_name }} || (git pull --rebase origin ${{ github.ref_name }} && git push origin HEAD:${{ github.ref_name }})
@@ -132,18 +154,26 @@ jobs:
       - name: Update Draft Status (Zipping Integration)
         shell: bash
         run: |
-          body=$(cat release_body.md)
-          printf "%s\n\n---\n🔄 **Release Progress**: Repository version synced. Creating release assets...\n" "$body" > updated_draft_body.md
+          cp release_body.md updated_draft_body.md
 
       - name: Update Draft Release on GitHub
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.versioning.outputs.tag }}
-          name: Release ${{ needs.versioning.outputs.version }}
-          body_path: updated_draft_body.md
-          prerelease: ${{ needs.versioning.outputs.is_prerelease == 'true' }}
-          draft: true
-          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.versioning.outputs.tag }}
+          VERSION: ${{ needs.versioning.outputs.version }}
+          IS_PRERELEASE: ${{ needs.versioning.outputs.is_prerelease }}
+        shell: bash
+        run: |
+          release_id=$(gh api "repos/$REPO/releases" --jq '.[] | select(.tag_name=="'$TAG'" or .name=="Release '$VERSION'") | select(.draft==true) | .id')
+          if [ -n "$release_id" ]; then
+            gh api -X PATCH "repos/$REPO/releases/$release_id" \
+              -f tag_name="$TAG" \
+              -f name="Release $VERSION" \
+              -f body_path="updated_draft_body.md" \
+              -F draft=true \
+              -F prerelease=$( [ "$IS_PRERELEASE" = "true" ] && echo "true" || echo "false" )
+          fi
 
   gh-release:
     needs: [versioning, sync-version]
@@ -160,7 +190,7 @@ jobs:
       - name: 📦 Zip Component
         run: |
           cd custom_components
-          zip -r ../db_infoscreen.zip db_infoscreen
+          zip -r ../kadermanager.zip kadermanager
           cd ..
 
       - name: Download Release Body Artifact
@@ -169,16 +199,53 @@ jobs:
           name: release-body
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.versioning.outputs.tag }}
-          name: Release ${{ needs.versioning.outputs.version }}
-          body_path: release_body.md
-          prerelease: ${{ needs.versioning.outputs.is_prerelease == 'true' }}
-          draft: false
-          generate_release_notes: false
-          files: |
-            db_infoscreen.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.versioning.outputs.tag }}
+          VERSION: ${{ needs.versioning.outputs.version }}
+          IS_PRERELEASE: ${{ needs.versioning.outputs.is_prerelease }}
+        shell: bash
+        run: |
+          # Find existing draft release
+          release_id=$(gh api "repos/$REPO/releases" --jq '.[] | select(.tag_name=="'$TAG'" or .name=="Release '$VERSION'") | select(.draft==true) | .id')
+          
+          # Set prerelease argument
+          prerelease_arg=""
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            prerelease_arg="--prerelease"
+          fi
+          
+          if [ -n "$release_id" ]; then
+            # Update the existing draft release to publish it
+            gh api -X PATCH "repos/$REPO/releases/$release_id" \
+              -f tag_name="$TAG" \
+              -f name="Release $VERSION" \
+              -f body_path="release_body.md" \
+              -F draft=false \
+              -F prerelease=$( [ "$IS_PRERELEASE" = "true" ] && echo "true" || echo "false" )
+              
+            # Upload the assets to the published release
+            gh release upload "$TAG" kadermanager.zip --clobber
+          else
+            # Create a brand new release if no draft exists
+            gh release create "$TAG" \
+              --title "Release $VERSION" \
+              --notes-file "release_body.md" \
+              $prerelease_arg \
+              kadermanager.zip
+          fi
+ 
+      - name: Post-Release Dev Bump
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin ${{ github.ref_name }}
+          NEW_DEV=$(python .github/scripts/version_manager.py bump --type dev --level patch)
+          if ! git diff --quiet; then
+            git commit -am "chore(dev): bump to $NEW_DEV [skip ci]"
+            git push origin HEAD:${{ github.ref_name }} || (git pull --rebase origin ${{ github.ref_name }} && git push origin HEAD:${{ github.ref_name }})
+          fi
 
   cleanup-release:
     needs: [versioning, sync-version, gh-release]

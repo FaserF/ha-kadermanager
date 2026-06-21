@@ -2,6 +2,8 @@
 import os
 import re
 import subprocess
+import json
+import glob
 from datetime import datetime
 
 
@@ -18,17 +20,61 @@ def run_git(args):
 
 def main():
     rtype = os.environ.get("RELEASE_TYPE", "beta")
+    bump_level = os.environ.get("BUMP_LEVEL", "patch")
+    version_override = os.environ.get("VERSION_OVERRIDE", "")
     repo = os.environ.get("REPO", "").lower()
 
-    # Calculate version
+    # Determine owner and repo_name dynamically
+    owner = "faserf"
+    repo_name = os.path.basename(os.getcwd())
+    if "/" in repo:
+        owner, repo_name = repo.split("/", 1)
+
+    # Dynamic manifest location
+    manifest_files = glob.glob("custom_components/*/manifest.json")
+    if not manifest_files:
+        print("Error: manifest.json not found!")
+        return
+    manifest_path = manifest_files[0]
+    domain = os.path.basename(os.path.dirname(manifest_path))
+
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+
+    friendly_name = manifest.get("name", domain)
+
+    # Dynamic documentation URL logic
+    docs_url = manifest.get("documentation")
+    if not docs_url:
+        if os.path.exists("docs"):
+            docs_url = f"https://{owner}.github.io/{repo_name}/"
+        else:
+            if repo:
+                docs_url = f"https://github.com/{repo}"
+            else:
+                docs_url = f"https://github.com/faserf/{repo_name}"
+
+    # Calculate version via version_manager
+    bump_args = [
+        "python",
+        ".github/scripts/version_manager.py",
+        "bump",
+        "--type",
+        rtype,
+        "--level",
+        bump_level,
+    ]
+    if version_override and version_override.strip():
+        bump_args += ["--override", version_override.strip()]
+
     version = (
-        subprocess.check_output(
-            ["python", ".github/scripts/version_manager.py", "bump", "--type", rtype]
-        )
+        subprocess.check_output(bump_args)
         .decode("utf-8")
         .strip()
     )
-    run_git(["checkout", "--", "custom_components/db_infoscreen/manifest.json"])
+
+    # Revert version bump change in manifest file (since versioning job only calculates it, sync-version actually writes it)
+    run_git(["checkout", "--", manifest_path])
 
     print(f"Calculated Version: {version}")
     tag = f"v{version}"
@@ -141,7 +187,7 @@ def main():
     test_count = 0
 
     for f in changed_files:
-        if f.startswith("custom_components/db_infoscreen/translations/"):
+        if f.startswith(f"custom_components/{domain}/translations/"):
             translation_count += 1
         elif f.startswith("custom_components/"):
             integration_count += 1
@@ -215,7 +261,7 @@ def main():
 
     released_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M") + " UTC"
     body_parts = [
-        f"# DB-Infoscreen {version}  {channel_badge}",
+        f"# {friendly_name} {version}  {channel_badge}",
         "",
         prerelease_note,
         "## 📋 What's Changed",
@@ -233,7 +279,7 @@ def main():
         "",
         "---",
         "",
-        f"*📖 [Documentation](https://faserf.github.io/ha-db_infoscreen/)  ·  🐛 [Report an Issue](https://github.com/{repo}/issues/new/choose)  ·  📦 [All Releases](https://github.com/{repo}/releases)*",
+        f"*📖 [Documentation]({docs_url})  ·  🐛 [Report an Issue](https://github.com/{repo}/issues/new/choose)  ·  📦 [All Releases](https://github.com/{repo}/releases)*",
     ]
 
     body = "\n".join(body_parts)
@@ -247,7 +293,6 @@ def main():
             f.write(f"version={version}\n")
             f.write(f"tag={tag}\n")
             f.write(f"is_prerelease={is_prerelease}\n")
-            # Write multiline output for release_body
             import uuid
 
             delimiter = f"gh_release_{uuid.uuid4().hex}"
