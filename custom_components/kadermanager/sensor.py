@@ -66,12 +66,15 @@ class KadermanagerSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        data = self.coordinator.data or {}
+        coordinator: KadermanagerDataUpdateCoordinator = cast(
+            KadermanagerDataUpdateCoordinator, self.coordinator
+        )
+        data = coordinator.data or {}
         attrs = {
             "events": data.get("events", []),
             "last_updated": (
-                self.coordinator.last_success.isoformat()
-                if self.coordinator.last_success
+                coordinator.last_success.isoformat()
+                if coordinator.last_success
                 else None
             ),
         }

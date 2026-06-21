@@ -153,15 +153,17 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
         # Restart-resistance: Skip update if the last successful scrape was too recent
         # (e.g. after a HA restart), unless it's a forced update.
-        if not self._force_update and self.last_success:
-            time_since_last = dt_util.now() - self.last_success
+        if not self._force_update and self.last_success is not None:
+            last_success: datetime = self.last_success
+            time_since_last = dt_util.now() - last_success
+            update_interval: timedelta = self.update_interval or timedelta(minutes=60)
             # We use a 15-minute buffer to ensure we don't skip when it's actually time
-            if time_since_last < (self.update_interval - timedelta(minutes=15)):
+            if time_since_last < (update_interval - timedelta(minutes=15)):
                 _LOGGER.info(
                     "Skipping scrape for %s: Last successful update was only %s minutes ago. Respecting update interval of %s minutes.",
                     self.teamname,
                     int(time_since_last.total_seconds() / 60),
-                    int(self.update_interval.total_seconds() / 60),
+                    int(update_interval.total_seconds() / 60),
                 )
                 return self.data
 
