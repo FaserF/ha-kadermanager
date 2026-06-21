@@ -9,12 +9,26 @@ The `kadermanager` integration retrieves event and participant information from 
 
 ## Features ✨
 
+- **Smart Dynamic Interval**: Intelligently scales update frequency based on event proximity (e.g. 30min during games, 12h when idle) to maximize data freshness while protecting your IP.
+- **Force Update**: Manual override to bypass all back-offs and jitter for an immediate refresh.
 - **Event Tracking**: See upcoming games/trainings, dates, and locations.
 - **Participation Stats**: Monitor how many people accepted or declined.
 - **Comments**: View latest comments on events.
-- **Robustness**: Uses browser sessions and headers to avoid blocking.
-- **Authentication**: Supports login to fetch internal team events.
+- **Modern Communication**: Uses asynchronous `aiohttp` and browsers-like headers to blend in and avoid blocking.
+- **Persistent Sessions**: Maintains login state across updates to minimize redundant authentication.
+- **Persistence & Survival**: Caches data locally to survive Home Assistant restarts and temporary IP bans.
+- **Bot Protection**: Implements automated back-off, randomized jitter, and rotated User-Agents to mimic human behavior.
 - **Self-Repair**: Automatically detects persistent failures (>24h) and creates a generic Repair issue in Home Assistant.
+
+> [!TIP]
+> **Smart Dynamic Interval Logic**:
+> - **Active Phase**: During and up to 3h after event start -> **30 min** updates (catches live updates & comments).
+> - **Recap Phase**: 3h to 6h after event start -> **2h** updates.
+> - **Proximity Phase**: Within 24h before event -> **60 min** updates.
+> - **Idle Phase**: Otherwise -> **12h** updates.
+
+> [!WARNING]
+> **Softbans & Scraping Policy**: Since this integration uses web scraping, it is subject to the website's anti-bot measures. To ensure long-term stability and avoid permanent IP bans, the minimum update interval is generally enforced at **60 minutes** unless using the Smart Interval feature or manual Force Update.
 
 ## Installation 🛠️
 
@@ -47,10 +61,10 @@ This integration works as a **Custom Repository** in HACS.
 ### Configuration Variables
 - **Team Name**: Your subdomain (e.g., `teamname` for `teamname.kadermanager.de`).
 - **Username/Password**: (Optional) Providing credentials allows the integration to log in and fetch non-public events/details.
-- **Additional Settings**: Refresh interval, event limits, comment fetching.
+- **Additional Settings**: Smart update interval, manual force update, event limits, comment fetching.
 
 ## Sensor Attributes
-The data is being refreshed every 30 minutes by default.
+The data is being refreshed every 60 minutes by default.
 
 ### General attributes
 - events:
@@ -99,18 +113,22 @@ automation:
   - alias: "Kadermanager Reminder - 2 Days Warning"
     trigger:
       - platform: template
-        value_template: "{{ as_timestamp(state_attr('sensor.kadermanager_teamname', 'events')[0].date) - as_timestamp(now()) <= 2 * 24 * 3600 }}"
-    condition:
-      - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events') }}"
+        value_template: >
+          {% set events = state_attr('sensor.kadermanager_teamname', 'events') %}
+          {% if events and events | count > 0 %}
+            {{ as_timestamp(events[0].date) - as_timestamp(now()) <= 2 * 24 * 3600 }}
+          {% else %}
+            false
+          {% endif %}
     action:
       - service: notify.notify
-        data_template:
+        data:
           title: "Upcoming Event"
           message: >
-            Next Event: {{ state_attr('sensor.kadermanager_teamname', 'events')[0].title }}
-            Date: {{ state_attr('sensor.kadermanager_teamname', 'events')[0].original_date }}
-            Participants: {{ state_attr('sensor.kadermanager_teamname', 'events')[0].in_count }}
+            {% set event = state_attr('sensor.kadermanager_teamname', 'events')[0] %}
+            Next Event: {{ event.title }}
+            Date: {{ event.original_date }}
+            Participants: {{ event.in_count }}
 ```
 </details>
 
@@ -124,22 +142,26 @@ automation:
   - alias: "Kadermanager - Low Participation Warning"
     trigger:
       - platform: template
-        value_template: "{{ as_timestamp(state_attr('sensor.kadermanager_teamname', 'events')[0].date) - as_timestamp(now()) < 24 * 3600 }}"
+        value_template: >
+          {% set events = state_attr('sensor.kadermanager_teamname', 'events') %}
+          {% if events and events | count > 0 %}
+            {{ as_timestamp(events[0].date) - as_timestamp(now()) < 24 * 3600 }}
+          {% else %}
+            false
+          {% endif %}
     condition:
-      # Ensure there are events
+      # Check it is a Game ("Spiel") and count is low
       - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events') }}"
-      # Check it is a Game ("Spiel")
-      - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].type == 'Spiel' }}"
-      # Check count safe casting to int
-      - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].in_count | int(0) < 6 }}"
+        value_template: >
+          {% set events = state_attr('sensor.kadermanager_teamname', 'events') %}
+          {{ events and events | count > 0 and events[0].type == 'Spiel' and events[0].in_count | int(0) < 6 }}
     action:
       - service: notify.notify
         data:
           title: "Low Player Count!"
-          message: "Warning: Only {{ state_attr('sensor.kadermanager_teamname', 'events')[0].in_count }} players for tomorrow's game!"
+          message: >
+            {% set event = state_attr('sensor.kadermanager_teamname', 'events')[0] %}
+            Warning: Only {{ event.in_count }} players for tomorrow's game!
 ```
 </details>
 
@@ -157,15 +179,20 @@ automation:
     condition:
       - condition: template
         value_template: >
-          {% set old_comments = trigger.from_state.attributes.events[0].comments if trigger.from_state.attributes.events else [] %}
-          {% set new_comments = trigger.to_state.attributes.events[0].comments if trigger.to_state.attributes.events else [] %}
-          {{ new_comments | length > old_comments | length }}
+          {% set old_events = trigger.from_state.attributes.events if trigger.from_state and trigger.from_state.attributes.events else [] %}
+          {% set new_events = trigger.to_state.attributes.events if trigger.to_state and trigger.to_state.attributes.events else [] %}
+          {% if old_events | count > 0 and new_events | count > 0 %}
+            {{ new_events[0].comments | length > old_events[0].comments | length }}
+          {% else %}
+            false
+          {% endif %}
     action:
       - service: notify.notify
         data:
           message: >
-            New comment by {{ state_attr('sensor.kadermanager_teamname', 'events')[0].comments[0].author }}:
-            {{ state_attr('sensor.kadermanager_teamname', 'events')[0].comments[0].text }}
+            {% set event = state_attr('sensor.kadermanager_teamname', 'events')[0] %}
+            New comment by {{ event.comments[0].author }}:
+            {{ event.comments[0].text }}
 ```
 </details>
 
@@ -182,16 +209,16 @@ automation:
         at: "08:00:00"
     condition:
       - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events') }}"
-      - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].date == now().strftime('%Y-%m-%d') }}"
-      - condition: template
-        value_template: "{{ state_attr('sensor.kadermanager_teamname', 'events')[0].type == 'Spiel' }}"
+        value_template: >
+          {% set events = state_attr('sensor.kadermanager_teamname', 'events') %}
+          {{ events and events | count > 0 and events[0].date == now().strftime('%Y-%m-%d') and events[0].type == 'Spiel' }}
     action:
       - service: notify.notify
         data:
           title: "Matchday!"
-          message: "Ready for the game against {{ state_attr('sensor.kadermanager_teamname', 'events')[0].title }} today at {{ state_attr('sensor.kadermanager_teamname', 'events')[0].time }}?"
+          message: >
+            {% set event = state_attr('sensor.kadermanager_teamname', 'events')[0] %}
+            Ready for the game against {{ event.title }} today at {{ event.time }}?
 ```
 </details>
 

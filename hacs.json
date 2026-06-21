@@ -1,5 +1,9 @@
 {
-    "name": "Kadermanager",
-    "render_readme": true,
-    "country": ["DE"]
+  "name": "Kadermanager",
+  "render_readme": true,
+  "country": [
+    "DE"
+  ],
+  "zip_release": true,
+  "filename": "kadermanager.zip"
 }

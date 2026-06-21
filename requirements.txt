@@ -1,0 +1,10 @@
+# CI and Test requirements
+ruff
+mypy
+pyyaml
+pytest
+pytest-asyncio
+pytest-cov
+homeassistant
+aiohttp
+beautifulsoup4

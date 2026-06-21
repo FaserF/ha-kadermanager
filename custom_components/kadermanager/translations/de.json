@@ -5,13 +5,15 @@
       "init": {
         "description": "Gib hier deine Kadermanager Infos an für die Suchabfragen.",
         "data": {
-          "team_name": "Team Name",
+          "teamname": "Team Name",
           "username": "Benutzername (E-Mail) für die Anmeldung",
           "password": "Passwort für die Anmeldung",
           "event_limit": "Maximale Anzahl an Events die abgerufen werden",
           "fetch_player_info": "Spielerdaten abrufen, wie z.B. Zusagen, Absagen?",
           "fetch_comments": "Kommentare zu Ereignissen abrufen?",
-          "update_interval": "Aktualisierungsintervall (Minuten)"
+          "update_interval": "Aktualisierungsintervall (Minuten)",
+          "force_update": "Jetzt sofort aktualisieren (einmalig)",
+          "dynamic_interval": "Smartes Intervall (Häufige Updates während/nach Events, sonst selten)"
         }
       }
     }
@@ -22,13 +24,14 @@
       "user": {
         "description": "Gib hier deine Kadermanager Infos an für die Suchabfragen.",
         "data": {
-          "team_name": "Team Name",
+          "teamname": "Team Name",
           "username": "Benutzername (E-Mail) für die Anmeldung",
           "password": "Passwort für die Anmeldung",
           "event_limit": "Maximale Anzahl an Events die abgerufen werden",
           "fetch_player_info": "Spielerdaten abrufen, wie z.B. Zusagen, Absagen?",
           "fetch_comments": "Kommentare zu Ereignissen abrufen?",
-          "update_interval": "Aktualisierungsintervall (Minuten)"
+          "update_interval": "Aktualisierungsintervall (Minuten)",
+          "dynamic_interval": "Smartes Intervall (Häufige Updates während/nach Events, sonst selten)"
         }
       }
     },
@@ -36,7 +39,9 @@
       "already_configured": "Dieser Kadermanager ist bereits eingerichtet"
     },
     "error": {
-      "unknown": "Unbekannter Fehler"
+      "unknown": "Unbekannter Fehler",
+      "cannot_connect": "Verbindung fehlgeschlagen. Überprüfe den Teamnamen.",
+      "invalid_auth": "Ungültige Authentifizierung."
     }
   }
 }

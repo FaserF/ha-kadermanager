@@ -1,6 +1,5 @@
 import logging
-from typing import Optional, Any
-from datetime import datetime
+from typing import Optional, cast
 
 from homeassistant import config_entries
 from homeassistant.components.sensor import SensorEntity
@@ -13,17 +12,25 @@ from .coordinator import KadermanagerDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(
-    hass: HomeAssistant, entry: config_entries.ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: config_entries.ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ):
     """Setup sensors from a config entry created in the integrations UI."""
     coordinator: KadermanagerDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([KadermanagerSensor(coordinator, entry)], update_before_add=True)
+    async_add_entities([KadermanagerSensor(coordinator, entry)])
+
 
 class KadermanagerSensor(CoordinatorEntity, SensorEntity):
     """Implementation of a Kadermanager sensor."""
 
-    def __init__(self, coordinator: KadermanagerDataUpdateCoordinator, entry: config_entries.ConfigEntry):
+    def __init__(
+        self,
+        coordinator: KadermanagerDataUpdateCoordinator,
+        entry: config_entries.ConfigEntry,
+    ):
         super().__init__(coordinator)
         self.teamname = entry.data[CONF_TEAM_NAME]
         self._name = f"Kadermanager {self.teamname}"
@@ -35,29 +42,43 @@ class KadermanagerSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def unique_id(self) -> str:
-        return f"{self.teamname}_sensor"
+        return f"{self._entry_id}_sensor"
 
     @property
     def icon(self):
         return "mdi:volleyball"
 
     @property
-    def state(self) -> Optional[str]:
-        if not self.coordinator.data or not self.coordinator.data.get('events'):
+    def native_value(self) -> Optional[str]:
+        coordinator: KadermanagerDataUpdateCoordinator = cast(
+            KadermanagerDataUpdateCoordinator, self.coordinator
+        )
+        if not coordinator.data:
+            if coordinator.last_success:
+                return "No events found"
+            return "Initializing..."
+
+        events = coordinator.data.get("events")
+        if not events:
             return "No events found"
-        return self.coordinator.data['events'][0]['original_date']
+
+        return events[0]["original_date"]
 
     @property
     def extra_state_attributes(self):
-        if not self.coordinator.data:
-            return {}
-
+        data = self.coordinator.data or {}
         attrs = {
-            'events': self.coordinator.data.get('events', []),
-            'last_updated': datetime.now().isoformat()
+            "events": data.get("events", []),
+            "last_updated": (
+                self.coordinator.last_success.isoformat()
+                if self.coordinator.last_success
+                else None
+            ),
         }
-        if 'general_comments' in self.coordinator.data:
-             attrs['comments'] = self.coordinator.data['general_comments']
+        if "general_comments" in data:
+            attrs["comments"] = data["general_comments"]
+        elif "comments" not in attrs:
+            attrs["comments"] = []
 
         return attrs
 
@@ -68,6 +89,7 @@ class KadermanagerSensor(CoordinatorEntity, SensorEntity):
     @property
     def attribution(self):
         from .const import ATTRIBUTION
+
         return ATTRIBUTION
 
     @property
@@ -78,5 +100,5 @@ class KadermanagerSensor(CoordinatorEntity, SensorEntity):
             "name": f"Kadermanager {self.teamname}",
             "manufacturer": "Kadermanager",
             "model": "Team Schedule",
-            "configuration_url": f"https://{self.teamname}.kadermanager.de",
+            "configuration_url": f"https://{self.teamname.lower()}.kadermanager.de",
         }
