@@ -2,8 +2,6 @@
 import os
 import re
 import subprocess
-import json
-import glob
 from datetime import datetime
 
 
@@ -20,34 +18,19 @@ def run_git(args):
 
 def main():
     rtype = os.environ.get("RELEASE_TYPE", "beta")
-    bump_level = os.environ.get("BUMP_LEVEL", "patch")
     repo = os.environ.get("REPO", "").lower()
 
-    # Dynamic manifest location
-    manifest_files = glob.glob("custom_components/*/manifest.json")
-    if not manifest_files:
-        print("Error: manifest.json not found!")
-        return
-    manifest_path = manifest_files[0]
-    domain = os.path.basename(os.path.dirname(manifest_path))
-
-    with open(manifest_path, "r", encoding="utf-8") as f:
-        manifest = json.load(f)
-    
-    friendly_name = manifest.get("name", domain)
-    docs_url = manifest.get("documentation", f"https://faserf.github.io/{os.path.basename(os.getcwd())}/")
-
-    # Calculate version via version_manager
+    # Calculate version
     version = (
         subprocess.check_output(
-            ["python", ".github/scripts/version_manager.py", "bump", "--type", rtype, "--level", bump_level]
+            ["python", ".github/scripts/version_manager.py", "bump", "--type", rtype]
         )
         .decode("utf-8")
         .strip()
     )
-    
-    # Revert version bump change in manifest file (since versioning job only calculates it, sync-version actually writes it)
-    run_git(["checkout", "--", manifest_path])
+    run_git(
+        ["checkout", "--", "custom_components/db_infoscreen/manifest.json"]
+    )
 
     print(f"Calculated Version: {version}")
     tag = f"v{version}"
@@ -160,7 +143,7 @@ def main():
     test_count = 0
 
     for f in changed_files:
-        if f.startswith(f"custom_components/{domain}/translations/"):
+        if f.startswith("custom_components/db_infoscreen/translations/"):
             translation_count += 1
         elif f.startswith("custom_components/"):
             integration_count += 1
@@ -234,7 +217,7 @@ def main():
 
     released_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M") + " UTC"
     body_parts = [
-        f"# {friendly_name} {version}  {channel_badge}",
+        f"# DB-Infoscreen {version}  {channel_badge}",
         "",
         prerelease_note,
         "## 📋 What's Changed",
@@ -252,7 +235,7 @@ def main():
         "",
         "---",
         "",
-        f"*📖 [Documentation]({docs_url})  ·  🐛 [Report an Issue](https://github.com/{repo}/issues/new/choose)  ·  📦 [All Releases](https://github.com/{repo}/releases)*",
+        f"*📖 [Documentation](https://faserf.github.io/ha-db_infoscreen/)  ·  🐛 [Report an Issue](https://github.com/{repo}/issues/new/choose)  ·  📦 [All Releases](https://github.com/{repo}/releases)*",
     ]
 
     body = "\n".join(body_parts)
@@ -266,6 +249,7 @@ def main():
             f.write(f"version={version}\n")
             f.write(f"tag={tag}\n")
             f.write(f"is_prerelease={is_prerelease}\n")
+            # Write multiline output for release_body
             import uuid
 
             delimiter = f"gh_release_{uuid.uuid4().hex}"
