@@ -83,3 +83,5 @@ ha_calendar_mock = sys.modules.get("homeassistant.components.calendar")
 if ha_calendar_mock:
     ha_calendar_mock.CalendarEntity = MockCalendarEntity  # type: ignore
     ha_calendar_mock.CalendarEvent = MagicMock  # type: ignore
+
+import pytest
