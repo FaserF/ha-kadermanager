@@ -57,3 +57,7 @@ venv.bak/
 .vscode/
 .idea/
 /scratch
+
+.mypy_cache/
+.ruff_cache/
+*.pyc
