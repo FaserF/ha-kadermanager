@@ -214,7 +214,8 @@ jobs:
 
       - name: 📦 Zip Component
         run: |
-          zip -r kadermanager.zip custom_components/kadermanager
+          cd custom_components/kadermanager
+          zip -r ../../kadermanager.zip .
 
       - name: Download Release Body Artifact
         uses: actions/download-artifact@v8
