@@ -1,4 +1,5 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![Downloads (Current release)](https://img.shields.io/github/downloads/FaserF/ha-kadermanager/latest/kadermanager.zip?label=Downloads%20(Current%20release)&style=for-the-badge)](https://github.com/FaserF/ha-kadermanager/releases)
 
 # Kadermanager Home Assistant Integration ⚽
 
@@ -7,6 +8,22 @@ The `kadermanager` integration retrieves event and participant information from 
 <img src="https://assets1.nimenhuuto.com/assets/logos/kadermanager.de/logo_h128-9f99c175236041ce4e42e770ed364faad6945c046539b14d1828720df6baa426.png" alt="Kadermanager" width="300px">
 <img src="images/sensor.png" alt="Kadermanager Sensor" width="300px">
 
+---
+
+## ❤️ Support This Project
+
+> I maintain this integration in my **free time alongside my regular job** — bug hunting, new features, and testing on real hardware. Test devices cost money, and every donation helps me stay independent and free up more time for open-source work.
+>
+> Donations are completely voluntary — but the more support I receive, the less I depend on other income sources and the more time I can realistically invest into these GitHub projects. 💪
+
+<div align="center">
+
+[![GitHub Sponsors](https://img.shields.io/badge/Sponsor%20on-GitHub-%23EA4AAA?style=for-the-badge&logo=github-sponsors&logoColor=white)](https://github.com/sponsors/FaserF)&nbsp;&nbsp;
+[![PayPal](https://img.shields.io/badge/Donate%20via-PayPal-%2300457C?style=for-the-badge&logo=paypal&logoColor=white)](https://paypal.me/FaserF)
+
+</div>
+
+---
 ## Features ✨
 
 - **Smart Dynamic Interval**: Intelligently scales update frequency based on event proximity (e.g. 30min during games, 12h when idle) to maximize data freshness while protecting your IP.
