@@ -1,15 +1,14 @@
 import logging
-from datetime import datetime, timedelta, date
-from typing import Optional
+from datetime import date, datetime, timedelta
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
-from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, CONF_TEAM_NAME
+from .const import CONF_TEAM_NAME, DOMAIN
 from .coordinator import KadermanagerDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,7 +33,7 @@ class KadermanagerCalendar(CoordinatorEntity, CalendarEntity):
         self.teamname = entry.data[CONF_TEAM_NAME]
         self._name = f"Kadermanager {self.teamname}"
         self._unique_id = f"{entry.entry_id}_calendar"
-        self._event: Optional[CalendarEvent] = None
+        self._event: CalendarEvent | None = None
 
     @property
     def name(self) -> str:
@@ -64,7 +63,7 @@ class KadermanagerCalendar(CoordinatorEntity, CalendarEntity):
         }
 
     @property
-    def event(self) -> Optional[CalendarEvent]:
+    def event(self) -> CalendarEvent | None:
         """Return the next upcoming event."""
         if not self.coordinator.data or not self.coordinator.data.get("events"):
             return None
@@ -97,7 +96,7 @@ class KadermanagerCalendar(CoordinatorEntity, CalendarEntity):
 
         return events
 
-    def _parse_event(self, event_data: dict) -> Optional[CalendarEvent]:
+    def _parse_event(self, event_data: dict) -> CalendarEvent | None:
         """Convert scraped data to CalendarEvent."""
         try:
             date_str = event_data.get("date")  # YYYY-MM-DD

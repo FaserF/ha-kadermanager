@@ -6,18 +6,18 @@ from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.const import __version__ as HA_VERSION
+from homeassistant.core import HomeAssistant
 from homeassistant.loader import async_get_integration
 
 from .const import (
-    CONF_PASSWORD,
-    CONF_USERNAME,
-    CONF_TEAM_NAME,
     CONF_EVENT_LIMIT,
-    CONF_UPDATE_INTERVAL,
-    CONF_FETCH_PLAYER_INFO,
     CONF_FETCH_COMMENTS,
+    CONF_FETCH_PLAYER_INFO,
+    CONF_PASSWORD,
+    CONF_TEAM_NAME,
+    CONF_UPDATE_INTERVAL,
+    CONF_USERNAME,
     DOMAIN,
 )
 from .coordinator import KadermanagerDataUpdateCoordinator

@@ -1,32 +1,32 @@
-import logging
 import asyncio
-import socket
+import logging
 import random
-
-from datetime import datetime, timedelta
-from homeassistant.util import dt as dt_util
-from typing import Any, Dict, List, Optional
 import re
-from bs4 import BeautifulSoup
-import aiohttp
+import socket
+from datetime import datetime, timedelta
+from typing import Any
 from urllib.parse import urljoin
 
+import aiohttp
+from bs4 import BeautifulSoup
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import storage
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.helpers import issue_registry as ir, storage
+from homeassistant.util import dt as dt_util
 
 from .const import (
-    DOMAIN,
-    CONF_TEAM_NAME,
-    CONF_USERNAME,
-    CONF_PASSWORD,
-    CONF_UPDATE_INTERVAL,
-    CONF_EVENT_LIMIT,
-    CONF_FETCH_PLAYER_INFO,
-    CONF_FETCH_COMMENTS,
-    CONF_FORCE_UPDATE,
     CONF_DYNAMIC_INTERVAL,
+    CONF_EVENT_LIMIT,
+    CONF_FETCH_COMMENTS,
+    CONF_FETCH_PLAYER_INFO,
+    CONF_FORCE_UPDATE,
+    CONF_PASSWORD,
+    CONF_TEAM_NAME,
+    CONF_UPDATE_INTERVAL,
+    CONF_USERNAME,
+    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,7 +45,7 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 ISSUE_ID_CONNECTION = "connection_error"
 
 
-def get_random_headers(teamname: str) -> Dict[str, str]:
+def get_random_headers(teamname: str) -> dict[str, str]:
     """Generate random headers to mimic a real browser."""
     ua = random.choice(USER_AGENTS)
     headers = {
@@ -111,11 +111,11 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
         self.store: storage.Store = storage.Store(hass, 1, f"{DOMAIN}_{self.teamname}")
 
-        self.last_success: Optional[datetime] = None
+        self.last_success: datetime | None = None
         self._issue_created = False
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
         self._logged_in = False
-        self._backoff_until: Optional[datetime] = None
+        self._backoff_until: datetime | None = None
         self._consecutive_failures = 0
         self._headers = get_random_headers(self.teamname)
 
@@ -243,7 +243,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
-    def _update_dynamic_interval(self, data: Dict[str, Any]) -> None:
+    def _update_dynamic_interval(self, data: dict[str, Any]) -> None:
         """Update the update interval dynamically based on upcoming and recent events."""
         if not self.config_entry.options.get(CONF_DYNAMIC_INTERVAL):
             # Fallback to configured fixed interval
@@ -308,7 +308,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             interval_reason,
         )
 
-    async def _async_scrape_data(self) -> Dict[str, Any]:
+    async def _async_scrape_data(self) -> dict[str, Any]:
         """Asynchronous scraping logic."""
         if self._session is None or self._session.closed:
             connector = aiohttp.TCPConnector(family=socket.AF_INET)
@@ -557,14 +557,14 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
         return data
 
-    async def _async_get_ical_data(self, url: str) -> List[Dict[str, Any]]:
+    async def _async_get_ical_data(self, url: str) -> list[dict[str, Any]]:
         """Fetch and parse iCal data."""
         content = await self._async_get_url(url)
         if not content:
             return []
 
         events = []
-        current_event: Dict[str, Any] = {}
+        current_event: dict[str, Any] = {}
         # Unfold lines (iCal lines starting with space are continuations)
         lines = content.replace("\r\n ", "").replace("\n ", "").splitlines()
 
@@ -612,7 +612,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
         return parsed_events
 
-    def _parse_widget_events(self, html: str) -> Dict[str, int]:
+    def _parse_widget_events(self, html: str) -> dict[str, int]:
         """Parse enrollment counts from the events widget."""
         soup = BeautifulSoup(html, "html.parser")
         counts = {}
@@ -714,7 +714,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Exception during login: %s", e)
             return False
 
-    async def _async_get_url(self, url: str) -> Optional[str]:
+    async def _async_get_url(self, url: str) -> str | None:
         """Fetch URL content."""
         try:
             assert self._session is not None
@@ -754,7 +754,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error("Failed to fetch %s: %s", url, e)
             return None
 
-    async def _async_fetch_event_details(self, event: Dict[str, Any], url: str):
+    async def _async_fetch_event_details(self, event: dict[str, Any], url: str):
         """Fetch and parse players/comments for a specific event."""
         html = await self._async_get_url(url)
         if not html:
@@ -773,8 +773,8 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             event["comments"] = self.parse_event_comments(soup)
 
     def parse_events(
-        self, events_html: str, home_html: Optional[str], team_url: str
-    ) -> List[Dict[str, Any]]:
+        self, events_html: str, home_html: str | None, team_url: str
+    ) -> list[dict[str, Any]]:
         """Parse the events list."""
         soup = BeautifulSoup(events_html, "html.parser")
         event_containers = soup.find_all("div", class_="event-detailed-container")
@@ -868,9 +868,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             )
         return events
 
-    def parse_event_players(self, soup: BeautifulSoup) -> Dict[str, List[str]]:
+    def parse_event_players(self, soup: BeautifulSoup) -> dict[str, list[str]]:
         """Parse player list from event page."""
-        player_types: Dict[str, List[str]] = {
+        player_types: dict[str, list[str]] = {
             "accepted_players": [],
             "declined_players": [],
             "no_response_players": [],
@@ -890,9 +890,9 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 player_types["no_response_players"] = players
         return player_types
 
-    def parse_event_comments(self, soup: BeautifulSoup) -> List[Dict[str, str]]:
+    def parse_event_comments(self, soup: BeautifulSoup) -> list[dict[str, str]]:
         """Parse comments from event page."""
-        comments: List[Dict[str, str]] = []
+        comments: list[dict[str, str]] = []
         comment_divs = soup.find_all("div", class_="message")
         for comment_div in reversed(comment_divs):
             if len(comments) >= 5:
@@ -904,10 +904,10 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 comments.append({"author": author, "text": text_elem.text.strip()})
         return comments
 
-    def parse_general_comments(self, html: str) -> List[Dict[str, str]]:
+    def parse_general_comments(self, html: str) -> list[dict[str, str]]:
         """Parse general team comments."""
         soup = BeautifulSoup(html, "html.parser")
-        comments: List[Dict[str, str]] = []
+        comments: list[dict[str, str]] = []
         comment_divs = soup.find_all("div", class_="row message")
         for comment_div in reversed(comment_divs):
             if len(comments) >= 5:
@@ -919,7 +919,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 comments.append({"author": author, "text": text_elem.text.strip()})
         return comments
 
-    def parse_date_string(self, date_str: str) -> tuple[Optional[str], Optional[str]]:
+    def parse_date_string(self, date_str: str) -> tuple[str | None, str | None]:
         """Convert German relative/absolute date string to ISO."""
         # Handle "07.04.2026 17:30" format directly if present
         date_time_match = re.search(
@@ -957,8 +957,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 day_str = details[-1]  # Fallback to last element
 
             # Remove trailing dots
-            if day_str.endswith("."):
-                day_str = day_str[:-1]
+            day_str = day_str.removesuffix(".")
 
             # Try to map German month names
             month_map = {
@@ -1023,7 +1022,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
         return target_date.strftime("%Y-%m-%d"), time_part
 
 
-async def validate_input(hass: HomeAssistant, data: Dict[str, Any]) -> None:
+async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> None:
     """Validate the user input allows us to connect (Shared validation)."""
     teamname = data[CONF_TEAM_NAME].lower()
     username = data.get(CONF_USERNAME)

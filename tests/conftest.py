@@ -1,6 +1,6 @@
+import datetime
 import sys
 from unittest.mock import MagicMock
-import datetime
 
 # Create a mock for the base homeassistant package
 ha_mock = MagicMock()

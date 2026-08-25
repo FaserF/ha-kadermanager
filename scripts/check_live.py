@@ -1,7 +1,8 @@
+import logging
+import sys
+
 import requests
 from bs4 import BeautifulSoup
-import sys
-import logging
 
 # Config
 TEST_URL = "https://tsv.kadermanager.de/events"

@@ -1,9 +1,11 @@
-import unittest
-from unittest.mock import MagicMock, patch, AsyncMock
-from datetime import datetime, timedelta
 import asyncio
+import unittest
+from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import aiohttp
 from homeassistant.helpers.update_coordinator import UpdateFailed
+
 from custom_components.kadermanager.coordinator import (
     KadermanagerDataUpdateCoordinator,
     get_random_headers,

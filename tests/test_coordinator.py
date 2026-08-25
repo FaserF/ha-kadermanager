@@ -1,6 +1,8 @@
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from bs4 import BeautifulSoup
+
 from custom_components.kadermanager.coordinator import KadermanagerDataUpdateCoordinator
 
 

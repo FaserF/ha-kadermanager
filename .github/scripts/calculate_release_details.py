@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
+import glob
+import json
 import os
 import re
 import subprocess
-import json
-import glob
 from datetime import datetime
 
 

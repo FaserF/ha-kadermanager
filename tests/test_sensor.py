@@ -1,15 +1,17 @@
-import pytest
 import os
 from unittest.mock import MagicMock
-from custom_components.kadermanager.coordinator import KadermanagerDataUpdateCoordinator
-from custom_components.kadermanager.sensor import KadermanagerSensor
+
+import pytest
+
 from custom_components.kadermanager.const import (
-    CONF_TEAM_NAME,
     CONF_EVENT_LIMIT,
-    CONF_FETCH_PLAYER_INFO,
     CONF_FETCH_COMMENTS,
+    CONF_FETCH_PLAYER_INFO,
+    CONF_TEAM_NAME,
     CONF_UPDATE_INTERVAL,
 )
+from custom_components.kadermanager.coordinator import KadermanagerDataUpdateCoordinator
+from custom_components.kadermanager.sensor import KadermanagerSensor
 
 
 # We need to mock requests to return our local file content

@@ -1,24 +1,24 @@
 import logging
 from typing import Any
-import voluptuous as vol
 
+import voluptuous as vol
 from homeassistant import config_entries
-from homeassistant.core import callback
 from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.core import callback
 
 from .const import (
+    CONF_DYNAMIC_INTERVAL,
     CONF_EVENT_LIMIT,
     CONF_FETCH_COMMENTS,
     CONF_FETCH_PLAYER_INFO,
     CONF_FORCE_UPDATE,
-    CONF_DYNAMIC_INTERVAL,
     CONF_PASSWORD,
     CONF_TEAM_NAME,
     CONF_UPDATE_INTERVAL,
     CONF_USERNAME,
     DOMAIN,
 )
-from .coordinator import validate_input, CannotConnect, InvalidAuth
+from .coordinator import CannotConnect, InvalidAuth, validate_input
 
 _LOGGER = logging.getLogger(__name__)
 

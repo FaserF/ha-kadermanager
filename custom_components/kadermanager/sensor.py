@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, cast
+from typing import cast
 
 from homeassistant import config_entries
 from homeassistant.components.sensor import SensorEntity
@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONF_TEAM_NAME
+from .const import CONF_TEAM_NAME, DOMAIN
 from .coordinator import KadermanagerDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class KadermanagerSensor(CoordinatorEntity, SensorEntity):
         return "mdi:volleyball"
 
     @property
-    def native_value(self) -> Optional[str]:
+    def native_value(self) -> str | None:
         coordinator: KadermanagerDataUpdateCoordinator = cast(
             KadermanagerDataUpdateCoordinator, self.coordinator
         )
