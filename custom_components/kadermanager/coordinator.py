@@ -153,17 +153,15 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
 
         # Restart-resistance: Skip update if the last successful scrape was too recent
         # (e.g. after a HA restart), unless it's a forced update.
-        if not self._force_update and self.last_success is not None:
+        if not self._force_update and self.last_success is not None and self.data:
             last_success: datetime = self.last_success
             time_since_last = dt_util.now() - last_success
             update_interval: timedelta = self.update_interval or timedelta(minutes=60)
-            # We use a 15-minute buffer to ensure we don't skip when it's actually time
-            if time_since_last < (update_interval - timedelta(minutes=15)):
+            if time_since_last < update_interval:
                 _LOGGER.info(
-                    "Skipping scrape for %s: Last successful update was only %s minutes ago. Respecting update interval of %s minutes.",
+                    "Reusing cached Kadermanager data on boot for %s: Last update was %s min ago",
                     self.teamname,
                     int(time_since_last.total_seconds() / 60),
-                    int(update_interval.total_seconds() / 60),
                 )
                 return self.data
 
@@ -174,12 +172,11 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             scrape_lock = domain_data.setdefault("scrape_lock", asyncio.Lock())
 
             async with scrape_lock:
-                # Add a significant random delay to avoid fixed-interval detection
-                if not self._force_update:
-                    _LOGGER.debug("Waiting for random jitter delay (5-30s)")
-                    await asyncio.sleep(random.uniform(5.0, 30.0))
+                # Add a random delay on background updates (not during startup/force update)
+                if not self._force_update and self.data is not None:
+                    _LOGGER.debug("Waiting for background random jitter delay (5-15s)")
+                    await asyncio.sleep(random.uniform(5.0, 15.0))
                 else:
-                    _LOGGER.info("Force update triggered, bypassing jitter delay")
                     self._force_update = False  # Reset for next regular update
 
                 async with asyncio.timeout(60):
