@@ -48,7 +48,7 @@ sys.modules["homeassistant.util.dt"] = dt_mock
 util_mock.dt = dt_mock
 # Mock DEFAULT_TIME_ZONE
 dt_mock.now.return_value = datetime.datetime(2024, 1, 1, 12, 0, 0)
-dt_mock.DEFAULT_TIME_ZONE = datetime.timezone.utc
+dt_mock.DEFAULT_TIME_ZONE = datetime.UTC
 
 sys.modules["homeassistant.config_entries"] = MagicMock()
 sys.modules["homeassistant.core"] = MagicMock()

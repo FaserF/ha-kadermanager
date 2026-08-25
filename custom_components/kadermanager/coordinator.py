@@ -295,7 +295,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                             min_interval = timedelta(hours=1)
                             interval_reason = f"Event '{event.get('title')}' is upcoming (starts {edt})"
 
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 continue
 
         self.update_interval = min_interval
@@ -375,7 +375,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                             "Skipping past event: %s on %s", e["title"], e["date"]
                         )
                         continue
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     if e["date"] < today_str:
                         continue
 
@@ -479,7 +479,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                         "Skipping past event: %s on %s", e["title"], e["date"]
                     )
                     continue
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 if e["date"] < today_str:
                     continue
 
@@ -646,7 +646,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
             if "last_success" in cache:
                 try:
                     self.last_success = dt_util.parse_datetime(cache["last_success"])
-                except (ValueError, TypeError):
+                except ValueError, TypeError:
                     self.last_success = None
 
     async def _async_login(self, login_url: str) -> bool:
@@ -799,7 +799,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                     else:
                         # Fallback: store by index string
                         enrollment_map[f"idx_{idx}"] = count
-                except (ValueError, AttributeError):
+                except ValueError, AttributeError:
                     continue
 
         events = []
@@ -1013,7 +1013,7 @@ class KadermanagerDataUpdateCoordinator(DataUpdateCoordinator):
                 # Season rollover heuristic: if date is > 6 months in past, it's likely next year
                 if target_date.month < today.month - 6:
                     target_date = target_date.replace(year=today.year + 1)
-            except (ValueError, IndexError):
+            except ValueError, IndexError:
                 return None, None
 
         return target_date.strftime("%Y-%m-%d"), time_part
@@ -1109,7 +1109,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> None:
                         raise CannotConnect("IP blocked during login")
                     else:
                         raise CannotConnect(f"Login failed with status {resp.status}")
-            except (InvalidAuth, CannotConnect):
+            except InvalidAuth, CannotConnect:
                 raise
             except Exception as e:
                 _LOGGER.error("Validation error: %s", e)

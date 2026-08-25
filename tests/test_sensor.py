@@ -20,7 +20,7 @@ def mock_html_content():
     fixture_path = os.path.join(
         os.path.dirname(__file__), "fixtures", "kadermanager_events.html"
     )
-    with open(fixture_path, "r", encoding="utf-8") as f:
+    with open(fixture_path, encoding="utf-8") as f:
         return f.read()
 
 
