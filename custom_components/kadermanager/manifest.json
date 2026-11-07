@@ -14,5 +14,6 @@
   "requirements": [
     "beautifulsoup4==4.15.0"
   ],
-  "version": "1.6.2-dev0"
+  "version": "1.6.2-dev0",
+  "quality_scale": "platinum"
 }
